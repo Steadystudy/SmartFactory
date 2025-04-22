@@ -2,7 +2,8 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { StatsCardProps } from '../model/types';
-import { COLORS } from '../lib/constants';
+
+const COLORS = ['#3B82F6', '#E5E7EB', '#10B981', '#F59E0B', '#EF4444'];
 
 export default function StatsCard({ title, value, subtext, data }: StatsCardProps) {
   const getPieData = () => {
@@ -67,11 +68,11 @@ export default function StatsCard({ title, value, subtext, data }: StatsCardProp
         </div>
       </div>
       {data.status && (
-        <div className='mt-3 grid grid-cols-2 gap-2'>
+        <div className='grid grid-cols-2 gap-2 mt-3'>
           {data.status.map((stat, index) => (
             <div key={index} className='flex items-center text-xs'>
               <div
-                className='w-2 h-2 rounded-full mr-1'
+                className='w-2 h-2 mr-1 rounded-full'
                 style={{ backgroundColor: COLORS[index % COLORS.length] }}
               />
               <span>
