@@ -23,6 +23,7 @@ public class AMR {
     @Column(nullable = false)
     private String type;
 
+    @Builder.Default
     @Column(name = "installed_at", nullable = false)
     private LocalDateTime installedAt = LocalDateTime.now();
 }
