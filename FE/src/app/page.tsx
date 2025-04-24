@@ -1,9 +1,6 @@
 import { StatsCard, OverviewChart } from '@/features/dashboard';
 import { getDashboardStats, getDashboardChart } from '@/features/dashboard/api/dashboard';
 
-// 3초마다 페이지를 재생성
-export const revalidate = 3;
-
 export default async function Home() {
   const statsData = await getDashboardStats();
   const chartData = await getDashboardChart();
