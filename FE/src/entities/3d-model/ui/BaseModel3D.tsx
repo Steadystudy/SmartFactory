@@ -2,15 +2,15 @@
 
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { Model3DProps } from '../model/types';
 import * as THREE from 'three';
 import { damp3, dampE } from 'maath/easing';
 
 const ANIMATION_SETTINGS = {
-  rotationDamping: 0.15,
+  rotationDamping: 0.2,
   positionDamping: 0.5,
-  rotationThreshold: 0.001,
+  rotationThreshold: 0.01,
   positionThreshold: 0.01,
   angleThreshold: 0.1,
   maxAnimationTime: 1.0,
@@ -21,6 +21,7 @@ export const BaseModel3D = ({
   position,
   scale = 1,
   rotation = [0, 0, 0],
+  onClick,
 }: Model3DProps) => {
   const { scene: originalScene } = useGLTF(modelPath);
 
@@ -137,5 +138,46 @@ export const BaseModel3D = ({
     modelRef.current.rotation.copy(currentRotation.current);
   });
 
-  return <primitive ref={modelRef} object={scene} scale={scale} />;
+  const [hovered, setHovered] = useState(false);
+  // hover 효과 적용
+  useEffect(() => {
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (hovered) {
+          child.material.emissive = new THREE.Color(0x0000ff);
+          child.material.emissiveIntensity = 0.2;
+          child.material.opacity = 0.9;
+        } else {
+          child.material.emissive = new THREE.Color(0x000000);
+          child.material.emissiveIntensity = 0;
+          child.material.opacity = 1;
+        }
+      }
+    });
+  }, [hovered, scene]);
+
+  return (
+    <primitive
+      ref={modelRef}
+      object={scene}
+      scale={scale}
+      className='cursor-pointer'
+      onClick={(e: React.MouseEvent) => {
+        e.stopPropagation();
+        // React DOM 이벤트의 defaultPrevented를 true로 설정
+        if (e.nativeEvent) {
+          e.nativeEvent.preventDefault();
+        }
+        onClick?.();
+      }}
+      onPointerOver={(e: React.PointerEvent) => {
+        e.stopPropagation();
+        setHovered(true);
+      }}
+      onPointerOut={(e: React.PointerEvent) => {
+        e.stopPropagation();
+        setHovered(false);
+      }}
+    />
+  );
 };

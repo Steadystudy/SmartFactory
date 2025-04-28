@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import { AMRInfo } from '@/entities/3d-model/model/types';
+import { AMR_CURRENT_STATE } from '@/features/visualization/model/types';
 
 interface ModelStore {
-  models: AMRInfo[];
+  models: AMR_CURRENT_STATE[];
   // 전체 모델 업데이트 함수 추가
-  updateModels: (models: AMRInfo[]) => void;
+  updateModels: (models: AMR_CURRENT_STATE[]) => void;
 }
 
 export const useModelStore = create<ModelStore>((set) => ({
