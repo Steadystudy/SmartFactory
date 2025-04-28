@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect } from 'react';
-import { AMRInfo, ModelType } from '@/entities/3d-model';
+import { ModelType } from '@/entities/3d-model';
 import { useModelStore } from '@/shared/model/store';
 import { Model3DRenderer } from '@/entities/map';
+import { AMR_CURRENT_STATE } from '@/features/visualization/model/types';
+import { radianToDegree } from '@/shared/hooks/useMathUtils';
 
 // 가상 AMR 데이터 생성 함수
-const generateVirtualAMRData = (amr: AMRInfo): AMRInfo => {
+const generateVirtualAMRData = (amr: AMR_CURRENT_STATE): AMR_CURRENT_STATE => {
   // 현재 시간을 기반으로 위치 계산
   const currentTime = Date.now() / 1000;
 
   // 두 번째 AMR: 원형 패턴
   const radius = 3;
-  const angle = (currentTime * 0.5) % (Math.PI * 2);
+  const angle = (currentTime * 0.5) % radianToDegree(Math.PI * 2);
 
   const locationX = amr.locationX + radius * Math.cos(angle);
   const locationY = amr.locationY + radius * Math.sin(angle);
