@@ -9,7 +9,7 @@ export enum AMRState {
 // 모델 타입 정의
 export type ModelType = 'amr' | 'ssf250' | 'ssf1200';
 
-export type missionType = 'MOVING' | 'CHARGING' | 'LOADING' | 'UNLOADING';
+export type MissionType = 'MOVING' | 'CHARGING' | 'LOADING' | 'UNLOADING';
 
 // AMR 정보 인터페이스
 export interface AMRInfo {
@@ -22,18 +22,20 @@ export interface AMRInfo {
   currentNode: number;
   loading: boolean;
   missionId: number;
-  missionType: missionType;
+  missionType: MissionType;
   submissionId: number;
   linearVelocity: number;
   errorList: string[];
+  errorCode: string; // 에러 발생 시 에러 코드
   timestamp: string;
   type: string;
   startX: number;
   startY: number;
   targetX: number;
   targetY: number;
-  prevX?: number;
-  prevY?: number;
+  prevX: number;
+  prevY: number;
+  expectedArrival: number;
 }
 
 // 모델 정보 인터페이스 (3D 렌더링용)
@@ -54,4 +56,5 @@ export interface Model3DProps {
   scale?: number;
   rotation?: [number, number, number];
   modelPath: string;
+  onClick?: () => void;
 }
