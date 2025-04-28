@@ -27,15 +27,25 @@ class AMR:
         self.current_mission = None
         self.interrupt_flag = False
 
+        self.current_mission_id = None
+        self.current_mission_type = None
+        self.current_submission_id = None
+        self.current_speed = 0
+        self.loaded = False
 
     def update_status(self):
         with LOCK:
             SHARED_STATUS[self.id] = {
                 "x": self.pos_x,
                 "y": self.pos_y,
-                "dir": self.dir,  # ✅ 방향 저장
+                "dir": self.dir,
                 "state": self.state,
                 "battery": self.battery,
+                "missionId": self.current_mission_id,
+                "missionType": self.current_mission_type,
+                "submissionId": self.current_submission_id,
+                "speed": self.current_speed,
+                "loaded": self.loaded,
                 "timestamp": time.time()
             }
 
@@ -60,12 +70,20 @@ class AMR:
 
     def process_mission(self, mission):
         self.state = 2
+        self.current_mission_id = mission["missionId"]
+        self.current_mission_type = mission["missionType"]
         self.update_status()
         for sub in mission["submissions"]:
+            self.current_submission_id = sub["submissionId"]
             node = self.map_data["nodes"][sub["nodeId"]]
             edge = self.map_data["edges"][sub["edgeId"]]
+            self.current_speed = edge["speed"]
             yield from self.move_to_node(node, edge)
         self.state = 1
+        self.current_mission_id = None
+        self.current_mission_type = None
+        self.current_submission_id = None
+        self.current_speed = 0
         self.update_status()
 
     def move_to_node(self, node, edge):
@@ -76,13 +94,36 @@ class AMR:
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # ✅ 방향 계산 (정확한 각도)
-        angle_rad = math.atan2(dy, dx)
-        angle_deg = math.degrees(angle_rad)
-        if angle_deg < 0:
-            angle_deg += 360
-        self.dir = angle_deg
+        # ✅ 이동 목표 방향 계산
+        target_angle_rad = math.atan2(dy, dx)
+        target_dir = math.degrees(target_angle_rad)
+        if target_dir < 0:
+            target_dir += 360
 
+        # ✅ 현재 방향과 목표 방향 차이 계산
+        diff = (target_dir - self.dir + 360) % 360
+        if diff > 180:
+            diff -= 360  # 반시계방향 회전 선택
+
+        # ✅ 회전하기 (3초에 360도 회전)
+        turn_speed = 360 / 3  # 120 degrees per second
+        turn_per_step = turn_speed * REALTIME_INTERVAL  # 한 스텝당 회전량
+        steps_to_turn = int(abs(diff) / turn_per_step)
+
+        for _ in range(steps_to_turn):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            if diff > 0:
+                self.dir += turn_per_step
+            else:
+                self.dir -= turn_per_step
+            self.dir %= 360
+            self.update_status()
+
+        # 정확히 목표방향으로 맞추기
+        self.dir = target_dir
+        self.update_status()
+
+        # ✅ 이동
         for _ in range(steps):
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
@@ -125,7 +166,7 @@ def send_missions(amrs):
         if amr.id.endswith("1"):
             # AMR001, AMR002는 왼쪽 코스로
             amr.assign_mission({
-                "missionId": f"m1",
+                "missionId": 1,
                 "missionType": "MOVING",
                 "submissions": [
                     {"submissionId": "1", "nodeId": "12", "edgeId": "7"},
@@ -145,7 +186,7 @@ def send_missions(amrs):
         elif amr.id.endswith("2"):
             # 나머지 AMR은 오른쪽 코스로
             amr.assign_mission({
-                "missionId": f"m2",
+                "missionId": 2,
                 "missionType": "MOVING",
                 "submissions": [
                     {"submissionId": "1", "nodeId": "11", "edgeId": "7"},
@@ -168,7 +209,7 @@ def send_missions(amrs):
             })
         elif amr.id.endswith("3"):
             amr.assign_mission({
-                "missionId": f"m3",
+                "missionId": 3,
                 "missionType": "MOVING",
                 "submissions": [
                     {"submissionId": "1", "nodeId": "2", "edgeId": "4"},
@@ -735,5 +776,15 @@ if __name__ == '__main__':
             with LOCK:
                 print(f"=== Step {step_count} ===")
                 for amr_id, status in SHARED_STATUS.items():
-                    print(
-                        f"{amr_id}: x={status['x']:.2f}, y={status['y']:.2f}, dir={status['dir']:.1f}°, state={status['state']}, battery={status['battery']}")
+                    print(f"""
+                    {amr_id}
+                      - 위치: ({status['x']:.2f}, {status['y']:.2f})
+                      - 방향: {status['dir']:.1f}°
+                      - 상태: {status['state']}
+                      - 배터리: {status['battery']:.1f}%
+                      - 미션 ID: {status.get('missionId')}
+                      - 미션 타입: {status.get('missionType')}
+                      - 현재 Submission ID: {status.get('submissionId')}
+                      - 속도: {status.get('speed')}
+                      - 자재 로딩 여부: {status.get('loaded')}
+                    """)
