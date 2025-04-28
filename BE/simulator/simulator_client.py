@@ -3,7 +3,8 @@ import threading
 import time
 import math
 from collections import deque
-from map_data import map_data
+import socketio
+from datetime import datetime
 
 
 # ---------- 설정 ----------
@@ -11,6 +12,107 @@ REALTIME_INTERVAL = 0.01  # 좌표 갱신 주기 (초)
 NUM_AMR = 3              # AMR 개수
 SHARED_STATUS = {}        # 모든 AMR의 실시간 위치 상태
 LOCK = threading.Lock()   # 공유 자원 보호
+map_data = None
+amrs = []  # <- 전역 AMR 리스트
+
+
+# ---------- Socket.IO 서버 ----------
+sio = socketio.Client()
+
+
+@sio.event
+def connect():
+    print('✅ Connected to server')
+
+@sio.event
+def disconnect():
+    print('❌ Disconnected from server')
+
+@sio.on('MAP_INFO')
+def on_map_info(data):
+    global map_data
+
+    print("[MAP_INFO] 맵 데이터 수신 완료")
+
+    raw_map = data['body']['mapData']
+
+    nodes = {}
+    for node in raw_map['areas']['nodes']:
+        nodes[str(node['nodeId'])] = {
+            'x': node['worldX'],
+            'y': node['worldY'],
+            'direction': node['direction']
+        }
+
+    edges = {}
+    for edge in raw_map['areas']['edges']:
+        edges[str(edge['edgeId'])] = {
+            'node1': edge['node1'],
+            'node2': edge['node2'],
+            'speed': edge['speed'],
+            'edgeDirection': edge['edgeDirection']
+        }
+
+    map_data = {
+        "nodes": nodes,
+        "edges": edges
+    }
+
+    print("✅ 맵 저장 완료! 바로 시뮬레이션 시작합니다.")
+    start_simulation()  # ✅ 여기서 바로 시작!
+
+@sio.on('MISSION_ASSIGN')
+def on_mission_assign(data):
+    print("[MISSION_ASSIGN] 미션 수신:", data)
+
+    mission = data['body']
+    target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
+
+    found = False
+    for amr in amrs:
+        if amr.id == target_amr_id:
+            amr.assign_mission({
+                "missionId": mission["missionId"],
+                "missionType": mission["missionType"],
+                "submissions": mission["submissions"]
+            })
+            found = True
+            break
+
+    if not found:
+        print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
+
+@sio.on('MISSION_CANCEL')
+def on_mission_cancel(data):
+    print("[MISSION_CANCEL] 미션 취소 수신:", data)
+
+    target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
+
+    found = False
+    for amr in amrs:
+        if amr.id == target_amr_id:
+            amr.interrupt_flag = True
+            found = True
+            break
+
+    if not found:
+        print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
+
+def start_simulation():
+    global amrs  # ✅ 전역 변수 사용 선언!
+
+    if map_data is None:
+        print("❌ 맵 데이터 없음. 시뮬레이션 시작할 수 없음.")
+        return
+
+    print("🚀 시뮬레이션 시작!")
+
+    amrs = setup_amrs(env, map_data)  # ✅ 전역 amrs에 저장
+    send_missions(amrs)
+
+    threading.Thread(target=broadcast_status, daemon=True).start()
+    threading.Thread(target=lambda: env.run(), daemon=True).start()
+
 
 # ---------- AMR 클래스 ----------
 class AMR:
@@ -18,8 +120,8 @@ class AMR:
         self.env = env
         self.id = amr_id
         self.map_data = map_data
-        self.pos_x = 0
-        self.pos_y = 0
+        self.pos_x = pos_x
+        self.pos_y = pos_y
         self.dir = 0  # 방향(degree)
         self.state = 1  # 1: IDLE, 2: PROCESSING
         self.battery = 100
@@ -37,6 +139,7 @@ class AMR:
     def update_status(self):
         with LOCK:
             SHARED_STATUS[self.id] = {
+                "id": self.id,
                 "x": self.pos_x,
                 "y": self.pos_y,
                 "dir": self.dir,
@@ -148,17 +251,22 @@ def setup_amrs(env, map_data):
     amrs = []
 
     amr = AMR(env, f"AMR001", map_data, 2.5, 17.5)
+    amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
 
     amr = AMR(env, f"AMR002", map_data, 5.5, 17.5)
+    amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
 
     amr = AMR(env, f"AMR003", map_data, 8.5, 17.5)
+    amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
+
     return amrs
+
 
 # ---------- 미션 보내기 ----------
 def send_missions(amrs):
@@ -232,33 +340,54 @@ def send_missions(amrs):
                 ]
             })
 
+# ---------- 상태 전송 ----------
+def broadcast_status():
+    while True:
+        with LOCK:
+            if not SHARED_STATUS:
+                time.sleep(0.1)
+                continue
+
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            messages = []
+            for amr_id, status in SHARED_STATUS.items():
+                message = {
+                    "header": {
+                        "msgName": "AGV_STATE",
+                        "time": now
+                    },
+                    "body": {
+                        "worldX": status["x"],
+                        "worldY": status["y"],
+                        "dir": status["dir"],
+                        "agvId": status["id"],
+                        "state": status["state"],
+                        "battary": status["battery"],
+                        "currentNode": "Node2_ID",
+                        "loading": "1" if status["loaded"] else "0",
+                        "missionId": status.get("missionId", ""),
+                        "submissionId": status.get("submissionId", ""),
+                        "linearVelocity": status.get("speed", 0),
+                        "errorList": []
+                    }
+                }
+                messages.append(message)
+
+            if messages:
+                print(f"[Broadcast] {len(messages)} AMRs - example:", messages[0])  # ✅ 추가
+
+            sio.emit('amr_status', messages)
+
+        time.sleep(0.1)
+
+
 
 # ---------- 메인 ----------
 if __name__ == '__main__':
     env = simpy.rt.RealtimeEnvironment(factor=1.0, strict=False)
 
+    sio.connect('http://localhost:5000')  # 1. 소켓 먼저 연결
 
-    amrs = setup_amrs(env, map_data)
-    send_missions(amrs)
+    sio.wait()  # 2. 그리고 여기서 무한 대기
 
-    # ---------- 시뮬레이션 + 로그 출력 ----------
-    step_count = 0
-    while env.peek() != float('inf'):
-        env.step()
-        step_count += 1
-        if step_count % 10 == 0:
-            with LOCK:
-                print(f"=== Step {step_count} ===")
-                for amr_id, status in SHARED_STATUS.items():
-                    print(f"""
-                    {amr_id}
-                      - 위치: ({status['x']:.2f}, {status['y']:.2f})
-                      - 방향: {status['dir']:.1f}°
-                      - 상태: {status['state']}
-                      - 배터리: {status['battery']:.1f}%
-                      - 미션 ID: {status.get('missionId')}
-                      - 미션 타입: {status.get('missionType')}
-                      - 현재 Submission ID: {status.get('submissionId')}
-                      - 속도: {status.get('speed')}
-                      - 자재 로딩 여부: {status.get('loaded')}
-                    """)
+
