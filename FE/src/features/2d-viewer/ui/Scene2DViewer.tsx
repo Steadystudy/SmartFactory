@@ -3,13 +3,13 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { useModelStore } from '@/shared/model/store';
-import { AMRInfo } from '@/entities/3d-model';
 import { Map2D } from '@/entities/map/2d/ui/Map2D';
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { damp3 } from 'maath/easing';
 import { Html } from '@react-three/drei';
+import { AMR_CURRENT_STATE } from '@/features/visualization';
 
 // AMR 상태에 따른 색상 매핑
 const AMR_STATE_COLORS: Record<number, string> = {
@@ -22,7 +22,7 @@ const AMR_STATE_COLORS: Record<number, string> = {
 const DAMPING_FACTOR = 0.15; // 감쇠 계수 (값이 작을수록 더 부드럽게 이동)
 
 // AMR 2D 렌더러 컴포넌트
-const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMRInfo }) => {
+const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
   const { state, locationX, locationY, dir, amrId } = amrInfo;
   const color = AMR_STATE_COLORS[state] || '#9E9E9E'; // 기본 회색
 

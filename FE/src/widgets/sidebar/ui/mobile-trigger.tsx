@@ -1,7 +1,7 @@
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/shared/hooks/use-mobile';
 
 export function MobileSidebarTrigger() {
   const isMobile = useIsMobile();
