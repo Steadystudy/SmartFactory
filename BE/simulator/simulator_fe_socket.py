@@ -99,55 +99,54 @@ class AMR:
         self.current_speed = 0
         self.update_status()
 
-    def move_to_node(self,node_id, node, edge):
+    def move_to_node(self, node_id, node, edge):
+        # 현재 위치와 목표 노드까지의 거리·속도·스텝 계산
         distance = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
-        speed = edge["speed"]
-        duration = distance / speed
+        speed = edge["speed"]  # m/s
+        duration = distance / speed  # 전체 이동 시간 (초)
         steps = max(1, int(duration / REALTIME_INTERVAL))
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # ✅ 이동 목표 방향 계산
-        target_angle_rad = math.atan2(dy, dx)
-        target_dir = math.degrees(target_angle_rad)
-        if target_dir < 0:
-            target_dir += 360
+        # 1) 표준 각도 (X축 기준, 반시계 +)
+        angle_rad = math.atan2(dy, dx)
+        angle_std = math.degrees(angle_rad) % 360
 
-        # ✅ 현재 방향과 목표 방향 차이 계산
+        # 2) Y축+을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
+        #    → target_dir이 0°일 때 Y양수, 90°일 때 X양수
+        target_dir = (90 - angle_std) % 360
+
+        # 3) 현재 방향(self.dir)과 목표 방향 차이 계산 (±180°)
         diff = (target_dir - self.dir + 360) % 360
         if diff > 180:
-            diff -= 360  # 반시계방향 회전 선택
+            diff -= 360
 
-        # ✅ 회전하기 (3초에 360도 회전)
-        turn_speed = 360 / 3  # 120 degrees per second
-        turn_per_step = turn_speed * REALTIME_INTERVAL  # 한 스텝당 회전량
+        # 4) 회전하기 (3초에 360° 회전)
+        turn_speed = 360 / 3  # degrees per second
+        turn_per_step = turn_speed * REALTIME_INTERVAL
         steps_to_turn = int(abs(diff) / turn_per_step)
 
         for _ in range(steps_to_turn):
             yield self.env.timeout(REALTIME_INTERVAL)
-            if diff > 0:
-                self.dir += turn_per_step
-            else:
-                self.dir -= turn_per_step
-            self.dir %= 360
+            # diff > 0 → 시계 방향(+), diff < 0 → 반시계 방향(−)
+            self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
             self.update_status()
 
-        # 정확히 목표방향으로 맞추기
+        # 5) 정확히 목표 방향으로 스냅
         self.dir = target_dir
         self.update_status()
 
-        # ✅ 이동
+        # 6) 직선 이동
         for _ in range(steps):
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
             self.pos_y += dy
 
-            self.battery -= 0.0001
-            if self.battery < 0:
-                self.battery = 0
-
+            # 배터리 소모
+            self.battery = max(self.battery - 0.0001, 0)
             self.update_status()
 
+        # 7) 최종 위치 보정
         self.pos_x = node["x"]
         self.pos_y = node["y"]
         self.current_node_id = node_id
