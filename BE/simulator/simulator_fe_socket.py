@@ -41,6 +41,8 @@ class AMR:
         self.current_speed = 0
         self.loaded = False
 
+        self.current_node_id = None
+
     def update_status(self):
         with LOCK:
             SHARED_STATUS[self.id] = {
@@ -53,6 +55,7 @@ class AMR:
                 "missionId": self.current_mission_id,
                 "missionType": self.current_mission_type,
                 "submissionId": self.current_submission_id,
+                "currentNode": self.current_node_id,
                 "speed": self.current_speed,
                 "loaded": self.loaded,
                 "timestamp": time.time()
@@ -84,10 +87,11 @@ class AMR:
         self.update_status()
         for sub in mission["submissions"]:
             self.current_submission_id = sub["submissionId"]
+            node_id = sub["nodeId"]
             node = self.map_data["nodes"][sub["nodeId"]]
             edge = self.map_data["edges"][sub["edgeId"]]
             self.current_speed = edge["speed"]
-            yield from self.move_to_node(node, edge)
+            yield from self.move_to_node(node_id, node, edge)
         self.state = 1
         self.current_mission_id = None
         self.current_mission_type = None
@@ -95,7 +99,7 @@ class AMR:
         self.current_speed = 0
         self.update_status()
 
-    def move_to_node(self, node, edge):
+    def move_to_node(self,node_id, node, edge):
         distance = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
         speed = edge["speed"]
         duration = distance / speed
@@ -146,6 +150,7 @@ class AMR:
 
         self.pos_x = node["x"]
         self.pos_y = node["y"]
+        self.current_node_id = node_id
         self.update_status()
 
     def get_distance(self, x1, y1, x2, y2):
@@ -262,18 +267,18 @@ def broadcast_status():
                         "time": now
                     },
                     "body": {
-                        "worldX": status["x"],
-                        "worldY": status["y"],
-                        "dir": status["dir"],
-                        "agvId": status["id"],
+                        "amrId": status["id"],
                         "state": status["state"],
-                        "battary": status["battery"],
-                        "currentNode": "Node2_ID",
+                        "locationX": status["x"],
+                        "locationY": status["y"],
+                        "dir": status["dir"],
+                        "currentNode": status.get("currentNode", ""),
                         "loading": "1" if status["loaded"] else "0",
-                        "missionId": status.get("missionId", ""),
-                        "submissionId": status.get("submissionId", ""),
                         "linearVelocity": status.get("speed", 0),
-                        "errorList": []
+                        "battary": status["battery"],
+                        "errorList": [],
+                        "missionId": status.get("missionId", ""),
+                        "submissionId": status.get("submissionId", "")
                     }
                 }
                 messages.append(message)
