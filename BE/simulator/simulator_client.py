@@ -39,6 +39,7 @@ def on_map_info(data):
     nodes = {}
     for node in raw_map['areas']['nodes']:
         nodes[str(node['nodeId'])] = {
+            'id': node['nodeId'],
             'x': node['worldX'],
             'y': node['worldY'],
             'direction': node['direction']
@@ -135,6 +136,7 @@ class AMR:
         self.current_submission_id = None
         self.current_speed = 0
         self.loaded = False
+        self.current_node_id = None
 
     def update_status(self):
         with LOCK:
@@ -148,6 +150,7 @@ class AMR:
                 "missionId": self.current_mission_id,
                 "missionType": self.current_mission_type,
                 "submissionId": self.current_submission_id,
+                "currentNode": self.current_node_id,
                 "speed": self.current_speed,
                 "loaded": self.loaded,
                 "timestamp": time.time()
@@ -241,6 +244,7 @@ class AMR:
 
         self.pos_x = node["x"]
         self.pos_y = node["y"]
+        self.current_node_id = node["id"]
         self.update_status()
 
     def get_distance(self, x1, y1, x2, y2):
@@ -363,7 +367,7 @@ def broadcast_status():
                         "agvId": status["id"],
                         "state": status["state"],
                         "battary": status["battery"],
-                        "currentNode": "Node2_ID",
+                        "currentNode": status.get("currentNode", ""),
                         "loading": "1" if status["loaded"] else "0",
                         "missionId": status.get("missionId", ""),
                         "submissionId": status.get("submissionId", ""),
