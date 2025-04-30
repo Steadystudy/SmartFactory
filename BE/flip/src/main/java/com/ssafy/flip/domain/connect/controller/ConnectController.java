@@ -1,0 +1,36 @@
+package com.ssafy.flip.domain.connect.controller;
+
+import com.ssafy.flip.domain.connect.service.ConnectService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+
+@Controller
+@RequestMapping("/api/v1/connect")
+@RequiredArgsConstructor
+public class ConnectController {
+
+    private final ConnectService connectService;
+
+    // 연결된 AMR 목록 조회
+    @GetMapping("/")
+    public ResponseEntity<Set<String>> getConnectedAmrs() {
+        return ResponseEntity.ok(connectService.getConnectedAmrs());
+    }
+
+    @PostMapping("/mission")
+    public ResponseEntity<String> sendMission(@RequestBody Map<String, Object> mission) {
+        try {
+            connectService.sendMission((String) mission.get("amrId"), mission);
+            return ResponseEntity.ok("미션 전송 완료");
+        } catch (IOException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("전송 실패: " + e.getMessage());
+        }
+    }
+}

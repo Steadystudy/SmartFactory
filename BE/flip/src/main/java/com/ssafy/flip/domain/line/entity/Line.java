@@ -18,4 +18,7 @@ public class Line {
 
     @Column(name = "cycle_time", nullable = false)
     private Float cycleTime;
+
+    @Column(nullable = false)
+    private boolean status;
 }
