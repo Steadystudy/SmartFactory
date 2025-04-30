@@ -1,4 +1,4 @@
-import { AMRInfo } from '@/entities/3d-model/model/types';
+import { AMRInfo } from '@/entities/amrModel/model/types';
 
 export type AMR_CURRENT_STATE = Pick<
   AMRInfo,
@@ -11,4 +11,5 @@ export type AMR_CURRENT_STATE = Pick<
   | 'loading'
   | 'linearVelocity'
   | 'errorCode'
+  | 'type'
 >;

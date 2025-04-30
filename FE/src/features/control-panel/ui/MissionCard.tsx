@@ -3,7 +3,7 @@
 import { Card } from '@/components/ui/card';
 import { BadgeAlert, BoltIcon } from 'lucide-react';
 import { AMR_CARD_STATUS } from '../model';
-import { AMRState } from '@/entities/3d-model';
+import { AMRState } from '@/entities/amrModel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { cn } from '@/lib/utils';

@@ -1,4 +1,4 @@
-import { AMRInfo } from '@/entities/3d-model';
+import { AMRInfo } from '@/entities/amrModel';
 
 export type AMR_CARD_STATUS = Pick<
   AMRInfo,
