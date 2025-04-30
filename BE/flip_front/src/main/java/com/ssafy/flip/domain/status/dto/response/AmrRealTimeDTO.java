@@ -1,5 +1,6 @@
 package com.ssafy.flip.domain.status.dto.response;
 
+import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -15,4 +16,18 @@ public class AmrRealTimeDTO {
     boolean loading;
     int linearVelocity;
     String errorCode;
+
+    public static AmrRealTimeDTO from(AmrStatusRedis amrStatusRedis) {
+        return new AmrRealTimeDTO(
+                amrStatusRedis.getAmrId(),
+                amrStatusRedis.getState(),
+                amrStatusRedis.getX(),
+                amrStatusRedis.getY(),
+                amrStatusRedis.getDirection(),
+                amrStatusRedis.getCurrentNode(),
+                amrStatusRedis.isLoading(),
+                Math.round(amrStatusRedis.getLinearVelocity()), // float -> int로 변환
+                amrStatusRedis.getErrorList()
+        );
+    }
 }
