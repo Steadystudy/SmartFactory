@@ -21,7 +21,7 @@ app = socketio.WSGIApp(sio)
 
 # ---------- AMR 클래스 ----------
 class AMR:
-    def __init__(self, env, amr_id, map_data, pos_x, pos_y):
+    def __init__(self, env, amr_id, map_data, pos_x, pos_y, type):
         self.env = env
         self.id = amr_id
         self.map_data = map_data
@@ -42,6 +42,7 @@ class AMR:
         self.loaded = False
 
         self.current_node_id = None
+        self.type = type
 
     def update_status(self):
         with LOCK:
@@ -159,17 +160,17 @@ class AMR:
 def setup_amrs(env, map_data):
     amrs = []
 
-    amr = AMR(env, f"AMR001", map_data, 2.5, 17.5)
+    amr = AMR(env, f"AMR001", map_data, 2.5, 17.5, 0)
     amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
 
-    amr = AMR(env, f"AMR002", map_data, 5.5, 17.5)
+    amr = AMR(env, f"AMR002", map_data, 5.5, 17.5, 1)
     amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
 
-    amr = AMR(env, f"AMR003", map_data, 8.5, 17.5)
+    amr = AMR(env, f"AMR003", map_data, 8.5, 17.5, 2)
     amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
@@ -270,6 +271,7 @@ def broadcast_status():
                         "state": status["state"],
                         "locationX": status["x"],
                         "locationY": status["y"],
+                        "type": status["type"],
                         "dir": status["dir"],
                         "currentNode": status.get("currentNode", ""),
                         "loading": "1" if status["loaded"] else "0",

@@ -116,7 +116,7 @@ def start_simulation():
 
 # ---------- AMR 클래스 ----------
 class AMR:
-    def __init__(self, env, amr_id, map_data, pos_x, pos_y, type):
+    def __init__(self, env, amr_id, map_data, pos_x, pos_y):
         self.env = env
         self.id = amr_id
         self.map_data = map_data
@@ -136,7 +136,9 @@ class AMR:
         self.current_speed = 0
         self.loaded = False
         self.current_node_id = None
-        self.type = type
+
+        self.avoidance_mode = False
+        self.avoidance_angle = 0
 
     def update_status(self):
         with LOCK:
@@ -201,28 +203,29 @@ class AMR:
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # 1) 표준 각도 (X축 기준, 반시계 +)
-        angle_rad = math.atan2(dy, dx)
-        angle_std = math.degrees(angle_rad) % 360
+        # ✅ 이동 목표 방향 계산
+        target_angle_rad = math.atan2(dy, dx)
+        target_dir = math.degrees(target_angle_rad)
+        if target_dir < 0:
+            target_dir += 360
 
-        # 2) Y축+을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
-        #    → target_dir이 0°일 때 Y양수, 90°일 때 X양수
-        target_dir = (90 - angle_std) % 360
-
-        # 3) 현재 방향(self.dir)과 목표 방향 차이 계산 (±180°)
+        # ✅ 현재 방향과 목표 방향 차이 계산
         diff = (target_dir - self.dir + 360) % 360
         if diff > 180:
-            diff -= 360
+            diff -= 360  # 반시계방향 회전 선택
 
-        # 4) 회전하기 (3초에 360° 회전)
-        turn_speed = 360 / 3  # degrees per second
-        turn_per_step = turn_speed * REALTIME_INTERVAL
+        # ✅ 회전하기 (3초에 360도 회전)
+        turn_speed = 360 / 3  # 120 degrees per second
+        turn_per_step = turn_speed * REALTIME_INTERVAL  # 한 스텝당 회전량
         steps_to_turn = int(abs(diff) / turn_per_step)
 
         for _ in range(steps_to_turn):
             yield self.env.timeout(REALTIME_INTERVAL)
-            # diff > 0 → 시계 방향(+), diff < 0 → 반시계 방향(−)
-            self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
+            if diff > 0:
+                self.dir += turn_per_step
+            else:
+                self.dir -= turn_per_step
+            self.dir %= 360
             self.update_status()
 
         # 정확히 목표방향으로 맞추기
@@ -232,8 +235,18 @@ class AMR:
         # ✅ 이동
         for _ in range(steps):
             yield self.env.timeout(REALTIME_INTERVAL)
-            self.pos_x += dx
-            self.pos_y += dy
+
+            if self.avoidance_mode:
+                rad = math.radians(self.avoidance_angle)
+                cos_r = math.cos(rad)
+                sin_r = math.sin(rad)
+                rotated_dx = dx * cos_r - dy * sin_r
+                rotated_dy = dx * sin_r + dy * cos_r
+                self.pos_x += rotated_dx
+                self.pos_y += rotated_dy
+            else:
+                self.pos_x += dx
+                self.pos_y += dy
 
             self.battery -= 0.0001
             if self.battery < 0:
@@ -246,6 +259,8 @@ class AMR:
         self.current_node_id = node["id"]
         self.update_status()
 
+
+
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
@@ -253,17 +268,17 @@ class AMR:
 def setup_amrs(env, map_data):
     amrs = []
 
-    amr = AMR(env, f"AMR001", map_data, 2.5, 17.5, 0)
+    amr = AMR(env, f"AMR001", map_data, 2.5, 17.5)
     amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
 
-    amr = AMR(env, f"AMR002", map_data, 5.5, 17.5, 1)
+    amr = AMR(env, f"AMR002", map_data, 5.5, 17.5)
     amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
 
-    amr = AMR(env, f"AMR003", map_data, 8.5, 17.5, 2)
+    amr = AMR(env, f"AMR003", map_data, 8.5, 17.5)
     amr.update_status()  # ✅ 최초 상태 넣기
     env.process(amr.run())
     amrs.append(amr)
@@ -292,7 +307,6 @@ def broadcast_status():
                         "worldY": status["y"],
                         "dir": status["dir"],
                         "agvId": status["id"],
-                        "type" : status["type"],
                         "state": status["state"],
                         "battary": status["battery"],
                         "currentNode": status.get("currentNode", ""),
