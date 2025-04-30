@@ -161,6 +161,7 @@ class AMR:
         self.type = type
         self.waiting_for_traffic = None  # (missionId, submissionId, nodeId)
         self.traffic_event = threading.Event()
+        self.current_edge_id = None
 
     def update_status(self):
         with LOCK:
@@ -178,7 +179,9 @@ class AMR:
                 "speed": self.current_speed,
                 "loaded": self.loaded,
                 "timestamp": time.time(),
-                "type": self.type
+                "type": self.type,
+                "currentEdge": self.current_edge_id,
+
             }
 
     def assign_mission(self, mission, replace=False):
@@ -210,6 +213,7 @@ class AMR:
             node = self.map_data["nodes"][sub["nodeId"]]
             edge = self.map_data["edges"][sub["edgeId"]]
             self.current_speed = edge["speed"]
+            self.current_edge_id = sub["edgeId"]
             yield from self.move_to_node(node, edge)
         self.state = 1
         self.current_mission_id = None
@@ -226,12 +230,13 @@ class AMR:
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # 1) 표준 각도 (X축 기준, 반시계 방향 +)
+        # 1) 표준 각도 (X축 기준, 반시계 +)
         angle_rad = math.atan2(dy, dx)
         angle_std = math.degrees(angle_rad) % 360
 
-        # 2) 음의 Y축(↓)을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
-        target_dir = (angle_std + 90) % 360
+        # 2) Y축+을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
+        #    → target_dir이 0°일 때 Y양수, 90°일 때 X양수
+        target_dir = (90 - angle_std) % 360
 
         # 3) 현재 방향(self.dir)과 목표 방향 차이 계산 (±180°)
         diff = (target_dir - self.dir + 360) % 360
@@ -245,6 +250,7 @@ class AMR:
 
         for _ in range(steps_to_turn):
             yield self.env.timeout(REALTIME_INTERVAL)
+            # diff > 0 → 시계 방향(+), diff < 0 → 반시계 방향(−)
             self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
             self.update_status()
 
@@ -252,8 +258,28 @@ class AMR:
         self.dir = target_dir
         self.update_status()
 
-        # 3) 이동
-        traffic_requested = False
+        # 2) TRAFFIC_REQ → 출발 시 즉시 요청
+        self.traffic_event.clear()
+        self.waiting_for_traffic = (
+            self.current_mission_id,
+            self.current_submission_id,
+            node["id"]
+        )
+
+        req_message = {
+            "header": {
+                "msgName": "TRAFFIC_REQ",
+                "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            },
+            "body": {
+                "missionId": self.current_mission_id,
+                "nodeId": node["id"],
+                "agvId": self.id
+            }
+        }
+        sios[int(self.id[-3:]) - 1].emit('traffic_req', req_message)
+
+        # 3) 이동 + PERMIT 도착 전이면 대기
         for _ in range(steps):
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
@@ -263,57 +289,17 @@ class AMR:
                 self.battery = 0
             self.update_status()
 
-            # 🚩 전면 거리 기반으로 TRAFFIC_REQ 요청
-            if not traffic_requested:
-                angle_rad_dir = math.radians((90 - self.dir) % 360)
-                front_x = self.pos_x + math.cos(angle_rad_dir) * 0.6
-                front_y = self.pos_y + math.sin(angle_rad_dir) * 0.6
-                front_dist = self.get_distance(front_x, front_y, node["x"], node["y"])
+            # 도착 전 PERMIT 확인
+            angle_rad_dir = math.radians((90 - self.dir) % 360)
+            front_x = self.pos_x + math.cos(angle_rad_dir) * 0.6
+            front_y = self.pos_y + math.sin(angle_rad_dir) * 0.6
+            front_dist = self.get_distance(front_x, front_y, node["x"], node["y"])
 
-                if front_dist <= 0.1:
-                    self.traffic_event.clear()
-                    self.waiting_for_traffic = (
-                        self.current_mission_id,
-                        self.current_submission_id,
-                        node["id"]
-                    )
+            if front_dist <= 0.1 and not self.traffic_event.is_set():
+                while not self.traffic_event.is_set():
+                    yield self.env.timeout(REALTIME_INTERVAL)
 
-                    req_message = {
-                        "header": {
-                            "msgName": "TRAFFIC_REQ",
-                            "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                        },
-                        "body": {
-                            "missionId": self.current_mission_id,
-                            "nodeId": node["id"],
-                            "agvId": self.id
-                        }
-                    }
-                    sios[int(self.id[-3:]) - 1].emit('traffic_req', req_message)
-                    traffic_requested = True
-
-        # 4) TRAFFIC_PERMIT 수신 대기
-        while not self.traffic_event.is_set():
-            yield self.env.timeout(REALTIME_INTERVAL)
-
-        # 5) 정확한 위치 정렬 및 최종 업데이트
-        self.pos_x = node["x"]
-        self.pos_y = node["y"]
-        self.current_node_id = node["id"]
-        self.update_status()
-
-        # ✅ 이동
-        for _ in range(steps):
-            yield self.env.timeout(REALTIME_INTERVAL)
-            self.pos_x += dx
-            self.pos_y += dy
-
-            self.battery -= 0.0001
-            if self.battery < 0:
-                self.battery = 0
-
-            self.update_status()
-
+        # 4) 위치 정렬
         self.pos_x = node["x"]
         self.pos_y = node["y"]
         self.current_node_id = node["id"]
@@ -321,6 +307,24 @@ class AMR:
 
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+    def is_head_on_collision(self):
+        for other_id, other in SHARED_STATUS.items():
+            if other_id == self.id:
+                continue
+
+            if other.get("currentEdge") != self.current_edge_id:
+                continue
+
+            dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+            if dist > 1.2:
+                continue
+
+            dir_diff = abs((self.dir - other["dir"] + 360) % 360)
+            if 150 < dir_diff < 210:
+                return True
+
+        return False
 
 # ---------- AMR 초기화 ----------
 def setup_amrs(env, map_data):
