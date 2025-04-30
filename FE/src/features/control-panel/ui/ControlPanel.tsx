@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MissionCard } from './MissionCard';
-import { AMRState } from '@/entities/3d-model';
+import { AMRState } from '@/entities/amrModel';
 import { AMR_CARD_STATUS } from '../model';
 import { useState, useMemo } from 'react';
 
@@ -59,51 +59,51 @@ const mockData: AMR_CARD_STATUS[] = [
     targetY: 55.2,
     expectedArrival: 900, // 15분
   },
-  {
-    amrId: 'AMR004',
-    state: AMRState.PROCESSING,
-    missionId: 3,
-    missionType: 'MOVING',
-    submissionId: 4,
-    errorCode: 'ERROR01',
-    timestamp: new Date().toISOString(),
-    type: 'TYPE002',
-    startX: 2.1,
-    startY: 7.5,
-    targetX: 40.8,
-    targetY: 75.2,
-    expectedArrival: 900, // 15분
-  },
-  {
-    amrId: 'AMR005',
-    state: AMRState.PROCESSING,
-    missionId: 3,
-    missionType: 'MOVING',
-    submissionId: 5,
-    errorCode: 'ERROR01',
-    timestamp: new Date().toISOString(),
-    type: 'TYPE003',
-    startX: 31.1,
-    startY: 40.5,
-    targetX: 75.8,
-    targetY: 55.2,
-    expectedArrival: 900, // 15분
-  },
-  {
-    amrId: 'AMR006',
-    state: AMRState.IDLE,
-    missionId: 3,
-    missionType: 'LOADING',
-    submissionId: 6,
-    errorCode: 'ERROR01',
-    timestamp: new Date().toISOString(),
-    type: 'TYPE003',
-    startX: 39.1,
-    startY: 48.5,
-    targetX: 48.8,
-    targetY: 5.2,
-    expectedArrival: 900, // 15분
-  },
+  // {
+  //   amrId: 'AMR004',
+  //   state: AMRState.PROCESSING,
+  //   missionId: 3,
+  //   missionType: 'MOVING',
+  //   submissionId: 4,
+  //   errorCode: 'ERROR01',
+  //   timestamp: new Date().toISOString(),
+  //   type: 'TYPE002',
+  //   startX: 2.1,
+  //   startY: 7.5,
+  //   targetX: 40.8,
+  //   targetY: 75.2,
+  //   expectedArrival: 900, // 15분
+  // },
+  // {
+  //   amrId: 'AMR005',
+  //   state: AMRState.PROCESSING,
+  //   missionId: 3,
+  //   missionType: 'MOVING',
+  //   submissionId: 5,
+  //   errorCode: 'ERROR01',
+  //   timestamp: new Date().toISOString(),
+  //   type: 'TYPE003',
+  //   startX: 31.1,
+  //   startY: 40.5,
+  //   targetX: 75.8,
+  //   targetY: 55.2,
+  //   expectedArrival: 900, // 15분
+  // },
+  // {
+  //   amrId: 'AMR006',
+  //   state: AMRState.IDLE,
+  //   missionId: 3,
+  //   missionType: 'LOADING',
+  //   submissionId: 6,
+  //   errorCode: 'ERROR01',
+  //   timestamp: new Date().toISOString(),
+  //   type: 'TYPE003',
+  //   startX: 39.1,
+  //   startY: 48.5,
+  //   targetX: 48.8,
+  //   targetY: 5.2,
+  //   expectedArrival: 900, // 15분
+  // },
 ];
 
 const FILTER_ALL = 'ALL';
@@ -132,7 +132,7 @@ export const ControlPanel = () => {
               <SelectValue placeholder='Mission' />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={FILTER_ALL}>전체</SelectItem>
+              <SelectItem value={FILTER_ALL}>미션</SelectItem>
               <SelectItem value='MOVING'>이동</SelectItem>
               <SelectItem value='CHARGING'>충전</SelectItem>
               <SelectItem value='LOADING'>적재</SelectItem>
@@ -145,7 +145,7 @@ export const ControlPanel = () => {
               <SelectValue placeholder='AMR' />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={FILTER_ALL}>전체</SelectItem>
+              <SelectItem value={FILTER_ALL}>전체 AMR</SelectItem>
               {mockData.map((amr) => (
                 <SelectItem key={amr.amrId} value={amr.amrId}>
                   {amr.amrId}
@@ -159,7 +159,7 @@ export const ControlPanel = () => {
               <SelectValue placeholder='State' />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={FILTER_ALL}>전체</SelectItem>
+              <SelectItem value={FILTER_ALL}>상태</SelectItem>
               <SelectItem value='0'>에러</SelectItem>
               <SelectItem value='1'>대기</SelectItem>
               <SelectItem value='2'>작업중</SelectItem>
