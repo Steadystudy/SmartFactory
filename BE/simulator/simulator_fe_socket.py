@@ -59,7 +59,8 @@ class AMR:
                 "currentNode": self.current_node_id,
                 "speed": self.current_speed,
                 "loaded": self.loaded,
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "type" : self.type
             }
 
     def assign_mission(self, mission, replace=False):
