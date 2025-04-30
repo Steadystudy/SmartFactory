@@ -16,16 +16,7 @@ map_data = None
 amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 
-# ---------- WebSocket 서버 ----------
-ws_clients = []
-for _ in range(20):
-    ws = websocket.WebSocketApp(
-        "ws://localhost:8080/ws/amr",
-        on_message=lambda ws, msg: on_message(ws, msg),
-        on_open=lambda ws: on_open(ws),
-        on_close=lambda ws: on_close(ws)
-    )
-    ws_clients.append(ws)
+
 
 # ---------- 메시지 핸들러 ----------
 def on_open(ws):
@@ -49,6 +40,17 @@ def on_message(ws, message):
             handle_traffic_permit(data)
     except Exception as e:
         print(f"❌ 메시지 처리 오류: {e}")
+
+# ---------- WebSocket 서버 ----------
+def make_ws_client():
+    return websocket.WebSocketApp(
+        "ws://localhost:8080/ws/amr",
+        on_message=on_message,
+        on_open=on_open,
+        on_close=on_close
+    )
+
+ws_clients = [make_ws_client() for _ in range(20)]
 
 # ---------- 메시지 처리 함수 ----------
 def handle_map_info(data, ws):
@@ -504,5 +506,8 @@ if __name__ == '__main__':
     for ws in ws_clients:
         threading.Thread(target=ws.run_forever, daemon=True).start()
 
+    # 🔒 메인 스레드가 종료되지 않도록 유지
+    while True:
+        time.sleep(1)
 
 
