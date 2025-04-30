@@ -7,6 +7,7 @@ public record FactoryStatusResponseDTO(
         int amrWorking,
         int amrWaiting,
         int amrCharging,
+        int amrError,
         int amrWorkTime,
         int lineMaxNum,
         int lineWorking,
