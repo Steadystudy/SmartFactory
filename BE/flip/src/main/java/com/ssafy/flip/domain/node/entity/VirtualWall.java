@@ -15,7 +15,7 @@ public class VirtualWall {
     @Id
     @Column(name = "wall_id")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer wallId;
+    private Long wallId;
 
     @Column(nullable = false)
     private Float x1;
