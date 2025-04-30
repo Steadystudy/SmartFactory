@@ -14,11 +14,11 @@ public class Storage {
     @Id
     @Column(name = "storage_id")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer storageId;
-
-    @Column(name = "material_id", nullable = false)
-    private Integer materialId;
+    private Long storageId;
 
     @Column(nullable = false)
-    private Long amount;
+    private int amount;
+
+    @Column(nullable = false)
+    private int maxAmount;
 }
