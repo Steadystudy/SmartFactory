@@ -95,13 +95,12 @@ class AMR:
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # 1) 표준 각도 (X축 기준, 반시계 +)
+        # 1) 표준 각도 (X축 기준, 반시계 방향 +)
         angle_rad = math.atan2(dy, dx)
         angle_std = math.degrees(angle_rad) % 360
 
-        # 2) Y축+을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
-        #    → target_dir이 0°일 때 Y양수, 90°일 때 X양수
-        target_dir = (90 - angle_std) % 360
+        # 2) 음의 Y축(↓)을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
+        target_dir = (angle_std + 90) % 360
 
         # 3) 현재 방향(self.dir)과 목표 방향 차이 계산 (±180°)
         diff = (target_dir - self.dir + 360) % 360
@@ -115,11 +114,10 @@ class AMR:
 
         for _ in range(steps_to_turn):
             yield self.env.timeout(REALTIME_INTERVAL)
-            # diff > 0 → 시계 방향(+), diff < 0 → 반시계 방향(−)
             self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
             self.update_status()
 
-        # 정확히 목표방향으로 맞추기
+        # 5) 정확히 목표 방향으로 스냅
         self.dir = target_dir
         self.update_status()
 

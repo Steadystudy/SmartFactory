@@ -9,7 +9,6 @@ from datetime import datetime
 
 # ---------- 설정 ----------
 REALTIME_INTERVAL = 0.01  # 좌표 갱신 주기 (초)
-NUM_AMR = 3              # AMR 개수
 SHARED_STATUS = {}        # 모든 AMR의 실시간 위치 상태
 LOCK = threading.Lock()   # 공유 자원 보호
 map_data = None
@@ -17,87 +16,110 @@ amrs = []  # <- 전역 AMR 리스트
 
 
 # ---------- Socket.IO 서버 ----------
-sio = socketio.Client()
+sios = []
+for _ in range(20):
+    sio = socketio.Client()
+    sios.append(sio)
 
 
-@sio.event
-def connect():
-    print('✅ Connected to server')
+def setup_socket_handlers(sio):
+    @sio.event
+    def connect():
+        print(f'✅ Connected to server: {sio.sid}')
 
-@sio.event
-def disconnect():
-    print('❌ Disconnected from server')
+    @sio.event
+    def disconnect():
+        print(f'❌ Disconnected from server: {sio.sid}')
 
-@sio.on('MAP_INFO')
-def on_map_info(data):
-    global map_data
+    @sio.on('MAP_INFO')
+    def on_map_info(data):
+        global map_data
 
-    print("[MAP_INFO] 맵 데이터 수신 완료")
+        print("[MAP_INFO] 맵 데이터 수신 완료")
 
-    raw_map = data['body']['mapData']
+        raw_map = data['body']['mapData']
 
-    nodes = {}
-    for node in raw_map['areas']['nodes']:
-        nodes[str(node['nodeId'])] = {
-            'id': node['nodeId'],
-            'x': node['worldX'],
-            'y': node['worldY'],
-            'direction': node['direction']
+        nodes = {}
+        for node in raw_map['areas']['nodes']:
+            nodes[str(node['nodeId'])] = {
+                'id': node['nodeId'],
+                'x': node['worldX'],
+                'y': node['worldY'],
+                'direction': node['direction']
+            }
+
+        edges = {}
+        for edge in raw_map['areas']['edges']:
+            edges[str(edge['edgeId'])] = {
+                'node1': edge['node1'],
+                'node2': edge['node2'],
+                'speed': edge['speed'],
+                'edgeDirection': edge['edgeDirection']
+            }
+
+        map_data = {
+            "nodes": nodes,
+            "edges": edges
         }
 
-    edges = {}
-    for edge in raw_map['areas']['edges']:
-        edges[str(edge['edgeId'])] = {
-            'node1': edge['node1'],
-            'node2': edge['node2'],
-            'speed': edge['speed'],
-            'edgeDirection': edge['edgeDirection']
-        }
+        print("✅ 맵 저장 완료! 바로 시뮬레이션 시작합니다.")
+        start_simulation()  # ✅ 여기서 바로 시작!
 
-    map_data = {
-        "nodes": nodes,
-        "edges": edges
-    }
+    @sio.on('MISSION_ASSIGN')
+    def on_mission_assign(data):
+        print("[MISSION_ASSIGN] 미션 수신:", data)
 
-    print("✅ 맵 저장 완료! 바로 시뮬레이션 시작합니다.")
-    start_simulation()  # ✅ 여기서 바로 시작!
+        mission = data['body']
+        target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
 
-@sio.on('MISSION_ASSIGN')
-def on_mission_assign(data):
-    print("[MISSION_ASSIGN] 미션 수신:", data)
+        found = False
+        for amr in amrs:
+            if amr.id == target_amr_id:
+                amr.assign_mission({
+                    "missionId": mission["missionId"],
+                    "missionType": mission["missionType"],
+                    "submissions": mission["submissions"]
+                })
+                found = True
+                break
 
-    mission = data['body']
-    target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
+        if not found:
+            print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
-    found = False
-    for amr in amrs:
-        if amr.id == target_amr_id:
-            amr.assign_mission({
-                "missionId": mission["missionId"],
-                "missionType": mission["missionType"],
-                "submissions": mission["submissions"]
-            })
-            found = True
-            break
+    @sio.on('MISSION_CANCEL')
+    def on_mission_cancel(data):
+        print("[MISSION_CANCEL] 미션 취소 수신:", data)
 
-    if not found:
-        print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
+        target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
 
-@sio.on('MISSION_CANCEL')
-def on_mission_cancel(data):
-    print("[MISSION_CANCEL] 미션 취소 수신:", data)
+        found = False
+        for amr in amrs:
+            if amr.id == target_amr_id:
+                amr.interrupt_flag = True
+                found = True
+                break
 
-    target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
+        if not found:
+            print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
-    found = False
-    for amr in amrs:
-        if amr.id == target_amr_id:
-            amr.interrupt_flag = True
-            found = True
-            break
+    @sio.on('TRAFFIC_PERMIT')
+    def on_traffic_permit(data):
+        permit = data['body']
+        mission_id = permit["missionId"]
+        submission_id = permit["submissionId"]
+        node_id = permit["nodeId"]
 
-    if not found:
-        print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
+        for amr in amrs:
+            if (amr.current_mission_id == mission_id and
+                    amr.current_submission_id == submission_id and
+                    amr.waiting_for_traffic == (mission_id, submission_id, node_id)):
+                print(f"✅ {amr.id} - 이동 허가 수신 (Node: {node_id})")
+                amr.traffic_event.set()
+                break
+
+
+
+
 
 def start_simulation():
     global amrs  # ✅ 전역 변수 사용 선언!
@@ -137,6 +159,8 @@ class AMR:
         self.loaded = False
         self.current_node_id = None
         self.type = type
+        self.waiting_for_traffic = None  # (missionId, submissionId, nodeId)
+        self.traffic_event = threading.Event()
 
     def update_status(self):
         with LOCK:
@@ -202,13 +226,12 @@ class AMR:
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # 1) 표준 각도 (X축 기준, 반시계 +)
+        # 1) 표준 각도 (X축 기준, 반시계 방향 +)
         angle_rad = math.atan2(dy, dx)
         angle_std = math.degrees(angle_rad) % 360
 
-        # 2) Y축+을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
-        #    → target_dir이 0°일 때 Y양수, 90°일 때 X양수
-        target_dir = (90 - angle_std) % 360
+        # 2) 음의 Y축(↓)을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
+        target_dir = (angle_std + 90) % 360
 
         # 3) 현재 방향(self.dir)과 목표 방향 차이 계산 (±180°)
         diff = (target_dir - self.dir + 360) % 360
@@ -222,12 +245,61 @@ class AMR:
 
         for _ in range(steps_to_turn):
             yield self.env.timeout(REALTIME_INTERVAL)
-            # diff > 0 → 시계 방향(+), diff < 0 → 반시계 방향(−)
             self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
             self.update_status()
 
-        # 정확히 목표방향으로 맞추기
+        # 5) 정확히 목표 방향으로 스냅
         self.dir = target_dir
+        self.update_status()
+
+        # 3) 이동
+        traffic_requested = False
+        for _ in range(steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x += dx
+            self.pos_y += dy
+            self.battery -= 0.0001
+            if self.battery < 0:
+                self.battery = 0
+            self.update_status()
+
+            # 🚩 전면 거리 기반으로 TRAFFIC_REQ 요청
+            if not traffic_requested:
+                angle_rad_dir = math.radians((90 - self.dir) % 360)
+                front_x = self.pos_x + math.cos(angle_rad_dir) * 0.6
+                front_y = self.pos_y + math.sin(angle_rad_dir) * 0.6
+                front_dist = self.get_distance(front_x, front_y, node["x"], node["y"])
+
+                if front_dist <= 0.1:
+                    self.traffic_event.clear()
+                    self.waiting_for_traffic = (
+                        self.current_mission_id,
+                        self.current_submission_id,
+                        node["id"]
+                    )
+
+                    req_message = {
+                        "header": {
+                            "msgName": "TRAFFIC_REQ",
+                            "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                        },
+                        "body": {
+                            "missionId": self.current_mission_id,
+                            "nodeId": node["id"],
+                            "agvId": self.id
+                        }
+                    }
+                    sios[int(self.id[-3:]) - 1].emit('traffic_req', req_message)
+                    traffic_requested = True
+
+        # 4) TRAFFIC_PERMIT 수신 대기
+        while not self.traffic_event.is_set():
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+        # 5) 정확한 위치 정렬 및 최종 업데이트
+        self.pos_x = node["x"]
+        self.pos_y = node["y"]
+        self.current_node_id = node["id"]
         self.update_status()
 
         # ✅ 이동
@@ -254,22 +326,24 @@ class AMR:
 def setup_amrs(env, map_data):
     amrs = []
 
-    amr = AMR(env, f"AMR001", map_data, 2.5, 17.5, 0)
-    amr.update_status()  # ✅ 최초 상태 넣기
-    env.process(amr.run())
-    amrs.append(amr)
+    amr_start_positions = [
+        (0.5, 69.5), (0.5, 67.5), (0.5, 65.5), (0.5, 63.5),
+        (0.5, 47.5), (0.5, 45.5), (0.5, 43.5), (0.5, 37.5),
+        (0.5, 35.5), (0.5, 33.5), (0.5, 31.5), (0.5, 16.5),
+        (0.5, 14.5), (0.5, 12.5), (0.5, 10.5), (3.5, 69.5),
+        (3.5, 67.0), (3.5, 65.5), (3.5, 63.5), (3.5, 47.5)
+    ]
 
-    amr = AMR(env, f"AMR002", map_data, 5.5, 17.5, 1)
-    amr.update_status()  # ✅ 최초 상태 넣기
-    env.process(amr.run())
-    amrs.append(amr)
-
-    amr = AMR(env, f"AMR003", map_data, 8.5, 17.5, 2)
-    amr.update_status()  # ✅ 최초 상태 넣기
-    env.process(amr.run())
-    amrs.append(amr)
+    for i, (x, y) in enumerate(amr_start_positions):
+        amr_id = f"AMR{str(i + 1).zfill(3)}"
+        amr_type = 0 if i < 10 else 1  # 0번~9번 → type=0, 10번~19번 → type=1
+        amr = AMR(env, amr_id, map_data, x, y, type=amr_type)
+        amr.update_status()
+        env.process(amr.run())
+        amrs.append(amr)
 
     return amrs
+
 
 
 # ---------- 상태 전송 ----------
@@ -281,8 +355,7 @@ def broadcast_status():
                 continue
 
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            messages = []
-            for amr_id, status in SHARED_STATUS.items():
+            for i, (amr_id, status) in enumerate(SHARED_STATUS.items()):
                 message = {
                     "header": {
                         "msgName": "AGV_STATE",
@@ -292,8 +365,8 @@ def broadcast_status():
                         "worldX": status["x"],
                         "worldY": status["y"],
                         "dir": status["dir"],
-                        "agvId": status["id"],
-                        "type" : status["type"],
+                        "amrId": status["id"],
+                        "type": status["type"],
                         "state": status["state"],
                         "battary": status["battery"],
                         "currentNode": status.get("currentNode", ""),
@@ -304,13 +377,8 @@ def broadcast_status():
                         "errorList": []
                     }
                 }
-                messages.append(message)
-
-            if messages:
-                print(f"[Broadcast] {len(messages)} AMRs - example:", messages[0])  # ✅ 추가
-
-            sio.emit('amr_status', messages)
-
+                if i < len(sios):
+                    sios[i].emit('amr_status', message)
         time.sleep(0.1)
 
 
@@ -318,9 +386,10 @@ def broadcast_status():
 # ---------- 메인 ----------
 if __name__ == '__main__':
     env = simpy.rt.RealtimeEnvironment(factor=1.0, strict=False)
+    for sio in sios:
+        setup_socket_handlers(sio)
+        sio.connect('http://localhost:5000')
+        threading.Thread(target=sio.wait, daemon=True).start()
 
-    sio.connect('http://localhost:5000')  # 1. 소켓 먼저 연결
-
-    sio.wait()  # 2. 그리고 여기서 무한 대기
 
 
