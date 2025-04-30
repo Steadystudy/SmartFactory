@@ -13,7 +13,7 @@ SHARED_STATUS = {}        # 모든 AMR의 실시간 위치 상태
 LOCK = threading.Lock()   # 공유 자원 보호
 map_data = None
 amrs = []  # <- 전역 AMR 리스트
-
+INTERSECTING_EDGE_PAIRS = set()
 
 # ---------- Socket.IO 서버 ----------
 sios = []
@@ -61,6 +61,8 @@ def setup_socket_handlers(sio):
             "nodes": nodes,
             "edges": edges
         }
+
+        INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
 
         print("✅ 맵 저장 완료! 바로 시뮬레이션 시작합니다.")
         start_simulation()  # ✅ 여기서 바로 시작!
@@ -117,9 +119,32 @@ def setup_socket_handlers(sio):
                 amr.traffic_event.set()
                 break
 
+# ---------- 교차 간선 계산 ----------
+def edges_intersect(p1, p2, q1, q2):
+    def ccw(a, b, c):
+        return (c["y"] - a["y"]) * (b["x"] - a["x"]) > (b["y"] - a["y"]) * (c["x"] - a["x"])
+    return ccw(p1, q1, q2) != ccw(p2, q1, q2) and ccw(p1, p2, q1) != ccw(p1, p2, q2)
 
+def compute_intersecting_edges(map_data):
+    intersecting_edge_pairs = set()
+    edges = map_data["edges"]
+    nodes = map_data["nodes"]
+    edge_list = []
 
+    for eid, edge in edges.items():
+        n1 = nodes[str(edge["node1"])]
+        n2 = nodes[str(edge["node2"])]
+        edge_list.append((eid, {"x": n1["x"], "y": n1["y"]}, {"x": n2["x"], "y": n2["y"]}))
 
+    for i in range(len(edge_list)):
+        eid1, a1, a2 = edge_list[i]
+        for j in range(i + 1, len(edge_list)):
+            eid2, b1, b2 = edge_list[j]
+            if edges_intersect(a1, a2, b1, b2):
+                intersecting_edge_pairs.add((eid1, eid2))
+                intersecting_edge_pairs.add((eid2, eid1))
+
+    return intersecting_edge_pairs
 
 def start_simulation():
     global amrs  # ✅ 전역 변수 사용 선언!
@@ -162,6 +187,7 @@ class AMR:
         self.waiting_for_traffic = None  # (missionId, submissionId, nodeId)
         self.traffic_event = threading.Event()
         self.current_edge_id = None
+        self.is_avoiding = False
 
     def update_status(self):
         with LOCK:
@@ -181,6 +207,7 @@ class AMR:
                 "timestamp": time.time(),
                 "type": self.type,
                 "currentEdge": self.current_edge_id,
+                "isAvoiding": self.is_avoiding,
 
             }
 
@@ -208,17 +235,24 @@ class AMR:
         self.current_mission_id = mission["missionId"]
         self.current_mission_type = mission["missionType"]
         self.update_status()
+
         for sub in mission["submissions"]:
             self.current_submission_id = sub["submissionId"]
+
+            # ✅ 여기에 넣으세요
+            self.current_edge_id = sub["edgeId"]
+
             node = self.map_data["nodes"][sub["nodeId"]]
             edge = self.map_data["edges"][sub["edgeId"]]
             self.current_speed = edge["speed"]
-            self.current_edge_id = sub["edgeId"]
             yield from self.move_to_node(node, edge)
+
+        # ✅ 미션 완료 후 초기화
         self.state = 1
         self.current_mission_id = None
         self.current_mission_type = None
         self.current_submission_id = None
+        self.current_edge_id = None
         self.current_speed = 0
         self.update_status()
 
@@ -230,35 +264,28 @@ class AMR:
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
 
-        # 1) 표준 각도 (X축 기준, 반시계 +)
+        # 1. 방향 계산
         angle_rad = math.atan2(dy, dx)
         angle_std = math.degrees(angle_rad) % 360
-
-        # 2) Y축+을 0°, X축+을 90°로 매핑하고 시계 방향을 +로
-        #    → target_dir이 0°일 때 Y양수, 90°일 때 X양수
         target_dir = (90 - angle_std) % 360
 
-        # 3) 현재 방향(self.dir)과 목표 방향 차이 계산 (±180°)
         diff = (target_dir - self.dir + 360) % 360
         if diff > 180:
             diff -= 360
 
-        # 4) 회전하기 (3초에 360° 회전)
-        turn_speed = 360 / 3  # degrees per second
+        turn_speed = 360 / 3
         turn_per_step = turn_speed * REALTIME_INTERVAL
         steps_to_turn = int(abs(diff) / turn_per_step)
 
         for _ in range(steps_to_turn):
             yield self.env.timeout(REALTIME_INTERVAL)
-            # diff > 0 → 시계 방향(+), diff < 0 → 반시계 방향(−)
             self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
             self.update_status()
 
-        # 5) 정확히 목표 방향으로 스냅
         self.dir = target_dir
         self.update_status()
 
-        # 2) TRAFFIC_REQ → 출발 시 즉시 요청
+        # 2. TRAFFIC_REQ 요청
         self.traffic_event.clear()
         self.waiting_for_traffic = (
             self.current_mission_id,
@@ -279,8 +306,25 @@ class AMR:
         }
         sios[int(self.id[-3:]) - 1].emit('traffic_req', req_message)
 
-        # 3) 이동 + PERMIT 도착 전이면 대기
+        # 3. 이동
         for _ in range(steps):
+            # 🔴 정면 충돌 감지 시 회피 시작
+            if self.is_head_on_collision():
+                print(f"⚠️ {self.id} 정면 충돌 → 우회 기동")
+                yield from self.avoid_and_recover(dx, dy, speed, target_dir)
+                continue
+
+            # 🟠 교차 충돌 감지 시 대기 or 회피
+            conflict_action = self.is_intersection_conflict(INTERSECTING_EDGE_PAIRS)
+            if conflict_action == "wait":
+                print(f"🛑 {self.id} 교차점 충돌 감지 - 정지 대기")
+                yield from self.wait_until_clear(INTERSECTING_EDGE_PAIRS)
+            elif conflict_action == "avoid":
+                print(f"⚠️ {self.id} 교차점 충돌 감지 - 회피 기동 시작")
+                yield from self.avoid_and_recover(dx, dy, speed, target_dir)
+                continue
+
+            # 정상 이동
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
             self.pos_y += dy
@@ -289,7 +333,7 @@ class AMR:
                 self.battery = 0
             self.update_status()
 
-            # 도착 전 PERMIT 확인
+            # PERMIT 확인
             angle_rad_dir = math.radians((90 - self.dir) % 360)
             front_x = self.pos_x + math.cos(angle_rad_dir) * 0.6
             front_y = self.pos_y + math.sin(angle_rad_dir) * 0.6
@@ -299,7 +343,7 @@ class AMR:
                 while not self.traffic_event.is_set():
                     yield self.env.timeout(REALTIME_INTERVAL)
 
-        # 4) 위치 정렬
+        # 4. 위치 정렬
         self.pos_x = node["x"]
         self.pos_y = node["y"]
         self.current_node_id = node["id"]
@@ -309,22 +353,81 @@ class AMR:
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     def is_head_on_collision(self):
-        for other_id, other in SHARED_STATUS.items():
-            if other_id == self.id:
-                continue
+        with LOCK:  # 🔐 상태 정보는 LOCK으로 보호된 SHARED_STATUS에서 확인
+            for other_id, other in SHARED_STATUS.items():
+                if other_id == self.id:
+                    continue  # 자기 자신은 제외
 
-            if other.get("currentEdge") != self.current_edge_id:
-                continue
+                # ✅ 같은 edge 위에 있는가?
+                if other.get("currentEdge") != self.current_edge_id or self.current_edge_id is None:
+                    continue
 
-            dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
-            if dist > 1.2:
-                continue
+                # ✅ 두 AMR의 거리 확인
+                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                if dist > 1.2:
+                    continue
 
-            dir_diff = abs((self.dir - other["dir"] + 360) % 360)
-            if 150 < dir_diff < 210:
-                return True
+                # ✅ 방향이 서로 반대인지 확인 (180도 ±30도)
+                dir_diff = abs((self.dir - other["dir"] + 360) % 360)
+                if 150 < dir_diff < 210:
+                    print(f"⚠️ 정면 충돌 감지: {self.id} vs {other['id']} (거리: {dist:.2f}, 각도차: {dir_diff:.1f})")
+                    return True
 
         return False
+
+    def is_intersection_conflict(self, intersecting_edge_pairs, conflict_distance=2):
+        with LOCK:
+            for other_id, other in SHARED_STATUS.items():
+                if other_id == self.id:
+                    continue
+                if (self.current_edge_id, other.get("currentEdge")) not in intersecting_edge_pairs:
+                    continue
+
+                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                if dist < conflict_distance:
+                    # 내가 늦게 진입했으면 대기 (회피 안 함)
+                    if SHARED_STATUS[self.id]["timestamp"] > other["timestamp"]:
+                        return "wait"
+                    else:
+                        return "avoid"
+        return None
+
+    def wait_until_clear(self, intersecting_edge_pairs):
+        while self.is_intersection_conflict(intersecting_edge_pairs) == "wait":
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+    def avoid_and_recover(self, dx, dy, speed, target_dir):
+        self.is_avoiding = True
+        offset_x, offset_y = self.get_offset_position(self.pos_x, self.pos_y, offset=0.6)
+        offset_dx = offset_x - self.pos_x
+        offset_dy = offset_y - self.pos_y
+
+        offset_angle_rad = math.atan2(offset_dy, offset_dx)
+        self.dir = (90 - math.degrees(offset_angle_rad)) % 360
+        self.update_status()
+
+        offset_steps = int(
+            self.get_distance(self.pos_x, self.pos_y, offset_x, offset_y) / (speed * REALTIME_INTERVAL))
+        for _ in range(offset_steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x += offset_dx / offset_steps
+            self.pos_y += offset_dy / offset_steps
+            self.update_status()
+
+        while self.is_intersection_conflict(INTERSECTING_EDGE_PAIRS) == "avoid":
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+        self.is_avoiding = False
+        self.dir = target_dir
+        self.update_status()
+
+    def get_offset_position(self, x, y, offset=0.6):
+        angle_rad = math.radians((90 - self.dir) % 360)
+        offset_angle = angle_rad - math.pi / 2  # 오른쪽 기준
+        offset_x = x + math.cos(offset_angle) * offset
+        offset_y = y + math.sin(offset_angle) * offset
+        return offset_x, offset_y
+
 
 # ---------- AMR 초기화 ----------
 def setup_amrs(env, map_data):
@@ -392,7 +495,7 @@ if __name__ == '__main__':
     env = simpy.rt.RealtimeEnvironment(factor=1.0, strict=False)
     for sio in sios:
         setup_socket_handlers(sio)
-        sio.connect('http://localhost:5000')
+        sio.connect('http://localhost:8080/ws/amr')
         threading.Thread(target=sio.wait, daemon=True).start()
 
 
