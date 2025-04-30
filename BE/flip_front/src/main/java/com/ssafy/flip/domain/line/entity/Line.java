@@ -14,8 +14,11 @@ public class Line {
     @Id
     @Column(name = "line_id")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer lineId;
+    private Long lineId;
 
     @Column(name = "cycle_time", nullable = false)
     private Float cycleTime;
+
+    @Column(nullable = false)
+    private boolean status;
 }
