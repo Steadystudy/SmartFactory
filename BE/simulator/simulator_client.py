@@ -3,7 +3,8 @@ import threading
 import time
 import math
 from collections import deque
-import socketio
+import websocket
+import json
 from datetime import datetime
 
 
@@ -15,109 +16,115 @@ map_data = None
 amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 
-# ---------- Socket.IO 서버 ----------
-sios = []
+# ---------- WebSocket 서버 ----------
+ws_clients = []
 for _ in range(20):
-    sio = socketio.Client()
-    sios.append(sio)
+    ws = websocket.WebSocketApp(
+        "ws://localhost:8080/ws/amr",
+        on_message=lambda ws, msg: on_message(ws, msg),
+        on_open=lambda ws: on_open(ws),
+        on_close=lambda ws: on_close(ws)
+    )
+    ws_clients.append(ws)
 
+# ---------- 메시지 핸들러 ----------
+def on_open(ws):
+    print(f"✅ WebSocket 연결 완료")
 
-def setup_socket_handlers(sio):
-    @sio.event
-    def connect():
-        print(f'✅ Connected to server: {sio.sid}')
+def on_close(ws):
+    print(f"❌ WebSocket 연결 해제")
 
-    @sio.event
-    def disconnect():
-        print(f'❌ Disconnected from server: {sio.sid}')
+def on_message(ws, message):
+    try:
+        data = json.loads(message)
+        msg_name = data.get("header", {}).get("msgName")
 
-    @sio.on('MAP_INFO')
-    def on_map_info(data):
-        global map_data
+        if msg_name == "MAP_INFO":
+            handle_map_info(data, ws)
+        elif msg_name == "MISSION_ASSIGN":
+            handle_mission_assign(data)
+        elif msg_name == "MISSION_CANCEL":
+            handle_mission_cancel(data)
+        elif msg_name == "TRAFFIC_PERMIT":
+            handle_traffic_permit(data)
+    except Exception as e:
+        print(f"❌ 메시지 처리 오류: {e}")
 
-        print("[MAP_INFO] 맵 데이터 수신 완료")
+# ---------- 메시지 처리 함수 ----------
+def handle_map_info(data, ws):
+    global map_data
 
-        raw_map = data['body']['mapData']
+    print("[MAP_INFO] 맵 데이터 수신 완료")
+    raw_map = data['body']['mapData']
 
-        nodes = {}
-        for node in raw_map['areas']['nodes']:
-            nodes[str(node['nodeId'])] = {
-                'id': node['nodeId'],
-                'x': node['worldX'],
-                'y': node['worldY'],
-                'direction': node['direction']
-            }
-
-        edges = {}
-        for edge in raw_map['areas']['edges']:
-            edges[str(edge['edgeId'])] = {
-                'node1': edge['node1'],
-                'node2': edge['node2'],
-                'speed': edge['speed'],
-                'edgeDirection': edge['edgeDirection']
-            }
-
-        map_data = {
-            "nodes": nodes,
-            "edges": edges
+    nodes = {}
+    for node in raw_map['areas']['nodes']:
+        nodes[str(node['nodeId'])] = {
+            'id': node['nodeId'],
+            'x': node['worldX'],
+            'y': node['worldY'],
+            'direction': node['direction']
         }
 
-        INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
+    edges = {}
+    for edge in raw_map['areas']['edges']:
+        edges[str(edge['edgeId'])] = {
+            'node1': edge['node1'],
+            'node2': edge['node2'],
+            'speed': edge['speed'],
+            'edgeDirection': edge['edgeDirection']
+        }
 
-        print("✅ 맵 저장 완료! 바로 시뮬레이션 시작합니다.")
-        start_simulation()  # ✅ 여기서 바로 시작!
+    map_data = {
+        "nodes": nodes,
+        "edges": edges
+    }
 
-    @sio.on('MISSION_ASSIGN')
-    def on_mission_assign(data):
-        print("[MISSION_ASSIGN] 미션 수신:", data)
+    INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
+    print("✅ 맵 저장 완료! 시뮬레이션 시작")
+    start_simulation()
 
-        mission = data['body']
-        target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
+def handle_mission_assign(data):
+    print("[MISSION_ASSIGN] 미션 수신:", data)
 
-        found = False
-        for amr in amrs:
-            if amr.id == target_amr_id:
-                amr.assign_mission({
-                    "missionId": mission["missionId"],
-                    "missionType": mission["missionType"],
-                    "submissions": mission["submissions"]
-                })
-                found = True
-                break
+    mission = data['body']
+    target_amr_id = data['header']['amrId']
 
-        if not found:
-            print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
+    for amr in amrs:
+        if amr.id == target_amr_id:
+            amr.assign_mission({
+                "missionId": mission["missionId"],
+                "missionType": mission["missionType"],
+                "submissions": mission["submissions"]
+            })
+            return
 
-    @sio.on('MISSION_CANCEL')
-    def on_mission_cancel(data):
-        print("[MISSION_CANCEL] 미션 취소 수신:", data)
+    print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
-        target_amr_id = data['header']['amrId']  # ✅ amrId로 대상 AMR 찾기
+def handle_mission_cancel(data):
+    print("[MISSION_CANCEL] 미션 취소 수신:", data)
+    target_amr_id = data['header']['amrId']
 
-        found = False
-        for amr in amrs:
-            if amr.id == target_amr_id:
-                amr.interrupt_flag = True
-                found = True
-                break
+    for amr in amrs:
+        if amr.id == target_amr_id:
+            amr.interrupt_flag = True
+            return
 
-        if not found:
-            print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
+    print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
-    @sio.on('TRAFFIC_PERMIT')
-    def on_traffic_permit(data):
-        permit = data['body']
-        mission_id = permit["missionId"]
-        submission_id = permit["submissionId"]
-        node_id = permit["nodeId"]
+def handle_traffic_permit(data):
+    permit = data['body']
+    mission_id = permit["missionId"]
+    submission_id = permit["submissionId"]
+    node_id = permit["nodeId"]
 
-        for amr in amrs:
-            if (amr.current_mission_id == mission_id and
-                    amr.current_submission_id == submission_id and
-                    amr.waiting_for_traffic == (mission_id, submission_id, node_id)):
-                print(f"✅ {amr.id} - 이동 허가 수신 (Node: {node_id})")
-                amr.traffic_event.set()
-                break
+    for amr in amrs:
+        if (amr.current_mission_id == mission_id and
+                amr.current_submission_id == submission_id and
+                amr.waiting_for_traffic == (mission_id, submission_id, node_id)):
+            print(f"✅ {amr.id} - 이동 허가 수신 (Node: {node_id})")
+            amr.traffic_event.set()
+            break
 
 # ---------- 교차 간선 계산 ----------
 def edges_intersect(p1, p2, q1, q2):
@@ -304,7 +311,8 @@ class AMR:
                 "agvId": self.id
             }
         }
-        sios[int(self.id[-3:]) - 1].emit('traffic_req', req_message)
+        ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req_message))
+
 
         # 3. 이동
         for _ in range(steps):
@@ -484,8 +492,8 @@ def broadcast_status():
                         "errorList": []
                     }
                 }
-                if i < len(sios):
-                    sios[i].emit('amr_status', message)
+                if i < len(ws_clients):
+                    ws_clients[i].send(json.dumps(message))
         time.sleep(0.1)
 
 
@@ -493,10 +501,8 @@ def broadcast_status():
 # ---------- 메인 ----------
 if __name__ == '__main__':
     env = simpy.rt.RealtimeEnvironment(factor=1.0, strict=False)
-    for sio in sios:
-        setup_socket_handlers(sio)
-        sio.connect('http://localhost:8080/ws/amr')
-        threading.Thread(target=sio.wait, daemon=True).start()
+    for ws in ws_clients:
+        threading.Thread(target=ws.run_forever, daemon=True).start()
 
 
 
