@@ -10,15 +10,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class RouteRepositoryImpl implements RouteRepository {
 
-    private final RouteRepository routeRepository;
+    private final RouteJpaRepository routeJpaRepository;
 
     @Override
     public Route save(Route route) {
-        return routeRepository.save(route);
+        return routeJpaRepository.save(route);
     }
 
     @Override
     public Optional<Route> findById(Long id) {
-        return routeRepository.findById(id);
+        return routeJpaRepository.findById(id);
     }
 }

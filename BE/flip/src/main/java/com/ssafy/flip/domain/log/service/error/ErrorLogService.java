@@ -1,7 +1,6 @@
 package com.ssafy.flip.domain.log.service.error;
 
 import com.ssafy.flip.domain.log.dto.error.request.*;
-import com.ssafy.flip.domain.log.dto.error.response.*;
 import com.ssafy.flip.domain.log.entity.ErrorLog;
 
 import java.util.Optional;
