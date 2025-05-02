@@ -5,10 +5,12 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 
@@ -33,10 +35,17 @@ export function AppSidebar() {
       <SidebarInset>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupContent>
+            {/* Logo Section */}
+            <SidebarHeader className="flex justify-between">
+              {/* <div className="flex items-center">
+                <span className="text-xl font-bold text-white">FLIP</span>
+              </div> */}
               <SidebarTrigger />
-            </SidebarGroupContent>
-            <SidebarGroupContent>
+            </SidebarHeader>
+            <SidebarSeparator />
+            
+            {/* Menu Section */}
+            <SidebarGroupContent className="mt-4">
               <SidebarMenu>
                 {items.map((item) => (
                   <SidebarMenuItem key={item.title}>
