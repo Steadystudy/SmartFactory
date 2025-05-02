@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Entity
 @EqualsAndHashCode(of = "errorLogId")
 @Table(name = "amr_error_log")
-public class AMRErrorLog {
+public class ErrorLog {
 
     @Id
     @Column(name = "error_log_id")
@@ -25,7 +25,7 @@ public class AMRErrorLog {
     private AMR amr;
 
     @Column(nullable = false)
-    private String error_code;
+    private String errorCode;
 
     @Column(nullable = false)
     private Float x;
