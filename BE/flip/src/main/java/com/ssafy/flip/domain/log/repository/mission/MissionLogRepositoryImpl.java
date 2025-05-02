@@ -10,15 +10,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class MissionLogRepositoryImpl implements MissionLogRepository {
 
-    private final MissionLogRepository missionLogRepository;
+    private final MissionLogJpaRepository missionLogJpaRepository;
 
     @Override
     public MissionLog save(MissionLog missionLog) {
-        return missionLogRepository.save(missionLog);
+        return missionLogJpaRepository.save(missionLog);
     }
 
     @Override
     public Optional<MissionLog> findById(Long id) {
-        return missionLogRepository.findById(id);
+        return missionLogJpaRepository.findById(id);
     }
 }
