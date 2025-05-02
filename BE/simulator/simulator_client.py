@@ -167,7 +167,7 @@ def compute_intersecting_edges(map_data):
 
     return intersecting_edge_pairs
 
-def detect_deadlock_and_get_core_amr(threshold=10):
+def detect_deadlock_and_get_core_amr(threshold=4):
     with LOCK:
         blocked_amrs = []
         for amr in amrs:
@@ -642,6 +642,7 @@ def broadcast_status():
                         "missionId": status.get("missionId", ""),
                         "submissionId": status.get("submissionId", ""),
                         "linearVelocity": status.get("speed", 0),
+                        "missionType": status.get("missionType", 0),
                         "errorList": []
                     }
                 }
