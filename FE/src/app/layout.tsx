@@ -6,7 +6,7 @@ import { AppSidebar, MobileSidebarTrigger } from '@/widgets/sidebar';
 import { MSWProvider } from '@/shared/mocks';
 
 if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.NODE_ENV !== 'production') {
-  import('@/shared/mocks/server').then(({ server }) => server.listen());
+  await import('@/shared/mocks/server').then(({ server }) => server.listen());
 }
 
 const geistSans = Geist({

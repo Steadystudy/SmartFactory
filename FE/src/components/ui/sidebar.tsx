@@ -130,10 +130,7 @@ function SidebarProvider({
               ...style,
             } as React.CSSProperties
           }
-          className={cn(
-            'group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full',
-            className,
-          )}
+          className={cn('dark group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full', className)}
           {...props}
         >
           {children}
@@ -199,7 +196,7 @@ function Sidebar({
 
   return (
     <div
-      className='hidden group peer text-sidebar-foreground md:block'
+      className='dark hidden group peer text-sidebar-foreground md:block'
       data-state={state}
       data-collapsible={state === 'collapsed' ? collapsible : ''}
       data-variant={variant}
@@ -254,14 +251,14 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       data-slot='sidebar-trigger'
       variant='ghost'
       size='icon'
-      className={cn('size-7', className)}
+      className={cn('size-8', className)}
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeftIcon className='size-5' />
       <span className='sr-only'>Toggle Sidebar</span>
     </Button>
   );
@@ -322,7 +319,7 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot='sidebar-header'
       data-sidebar='header'
-      className={cn('flex flex-col gap-2 p-2', className)}
+      className={cn('flex flex-col gap-2', className)}
       {...props}
     />
   );
