@@ -65,6 +65,8 @@ def handle_map_info(data, ws):
             'id': node['nodeId'],
             'x': node['worldX'],
             'y': node['worldY'],
+            'nodeName' : node['nodeName'],
+            'nodeType' : node['nodeType'],
             'direction': node['direction']
         }
 
@@ -320,8 +322,27 @@ class AMR:
         for _ in range(steps):
             # 🔴 정면 충돌 감지 시 회피 시작
             if self.is_head_on_collision():
-                print(f"⚠️ {self.id} 정면 충돌 → 우회 기동")
-                yield from self.avoid_and_recover(dx, dy, speed, target_dir)
+                # 회피 조건 판단
+                with LOCK:
+                    # 회피를 이미 수행 중이면 스킵
+                    if self.is_avoiding:
+                        continue
+
+                    # 회피 주체 판단: timestamp 기준 빠른 쪽이 회피함
+                    for other_id, other in SHARED_STATUS.items():
+                        if other_id == self.id:
+                            continue
+                        if other.get("currentEdge") == self.current_edge_id:
+                            dir_diff = abs((self.dir - other["dir"] + 360) % 360)
+                            dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                            if 150 < dir_diff < 210 and dist < 1.2:
+                                if SHARED_STATUS[self.id]["timestamp"] < other["timestamp"]:
+                                    print(f"⚠️ {self.id} 정면 충돌 → 회피 시작")
+                                    yield from self.avoid_and_recover(dx, dy, speed, target_dir)
+                                else:
+                                    print(f"🛑 {self.id} 정면 충돌 감지 → 대기")
+                                    while self.is_head_on_collision():
+                                        yield self.env.timeout(REALTIME_INTERVAL)
                 continue
 
             # 🟠 교차 충돌 감지 시 대기 or 회피
@@ -358,6 +379,34 @@ class AMR:
         self.pos_y = node["y"]
         self.current_node_id = node["id"]
         self.update_status()
+
+        # 5. 노드 방향 회전 처리 (charging, docking 등)
+        if node["nodeType"] in ("charging", "docking"):
+            target_dir = node["direction"]
+            diff = (target_dir - self.dir + 360) % 360
+            if diff > 180:
+                diff -= 360
+
+            turn_speed = 360 / 3  # 120 deg/sec
+            turn_per_step = turn_speed * REALTIME_INTERVAL
+            steps_to_turn = int(abs(diff) / turn_per_step)
+
+            for _ in range(steps_to_turn):
+                yield self.env.timeout(REALTIME_INTERVAL)
+                self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
+                self.update_status()
+
+            self.dir = target_dir
+            self.update_status()
+
+        # 6. docking 노드는 도착 후 작업 시간 5초간 대기
+        if node["nodeType"] == "docking":
+            print(f"🛠️ {self.id} docking 작업 중 (5초)")
+            for _ in range(int(5 / REALTIME_INTERVAL)):
+                yield self.env.timeout(REALTIME_INTERVAL)
+
+
+
 
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
