@@ -1,18 +1,14 @@
 package com.ssafy.flip.domain.log.service.route;
 
 import com.ssafy.flip.domain.log.dto.route.request.AddRouteRequestDTO;
-import com.ssafy.flip.domain.log.entity.MissionLog;
 import com.ssafy.flip.domain.log.entity.Route;
 import com.ssafy.flip.domain.log.repository.route.RouteRepository;
 import com.ssafy.flip.domain.log.service.mission.MissionLogService;
-import com.ssafy.flip.domain.node.entity.Edge;
-import com.ssafy.flip.domain.node.entity.Node;
 import com.ssafy.flip.domain.node.service.edge.EdgeService;
 import com.ssafy.flip.domain.node.service.node.NodeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
