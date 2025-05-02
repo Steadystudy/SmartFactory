@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { MapControls, Sphere } from '@react-three/drei';
 import { Suspense } from 'react';
-import { Map3DEnvironment } from '@/entities/map';
+import { Map3D } from '@/entities/map';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { useModelStore } from '@/shared/model/store';
 import { Model3DRenderer, ModelType } from '@/entities/amrModel';
@@ -52,34 +52,25 @@ const Warehouse = () => {
       <MapControls
         ref={controlsRef}
         enableZoom={true}
-        minDistance={5}
-        maxDistance={50}
+        minDistance={40}
+        maxDistance={80}
+        autoRotate={false}
         maxPolarAngle={Math.PI / 4}
         minPolarAngle={Math.PI / 4}
+        target={[40, 0, 40]}
       />
     </>
   );
 };
 
 const Scene3DViewer = () => {
-  const { reset } = useSelectedAMRStore();
-
-  const handleCanvasClick = (event: React.MouseEvent) => {
-    // event.defaultPrevented가 true이면 하위 컴포넌트에서 이벤트를 처리한 것
-    if (!event.defaultPrevented) {
-      reset();
-    }
-  };
-
   return (
-    <div className='w-full h-full cursor-grab active:cursor-grabbing' onClick={handleCanvasClick}>
-      <Canvas camera={{ position: [40, 40, 40], fov: 40 }}>
-        <Suspense fallback={null}>
-          <Map3DEnvironment />
-          <Warehouse />
-        </Suspense>
-      </Canvas>
-    </div>
+    <Canvas camera={{ position: [40, 40, 40], fov: 60 }}>
+      <Suspense fallback={null}>
+        <Map3D />
+        <Warehouse />
+      </Suspense>
+    </Canvas>
   );
 };
 
