@@ -43,7 +43,5 @@ public class WebSocketServiceImpl implements WebSocketService {
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
-
-
     }
 }

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
@@ -15,5 +16,10 @@ public class EdgeRepositoryImpl implements EdgeRepository{
     @Override
     public List<Edge> findAll() {
         return edgeJpaRepository.findAll();
+    }
+
+    @Override
+    public Optional<Edge> findById(Integer edgeId) {
+        return edgeJpaRepository.findById(edgeId);
     }
 }
