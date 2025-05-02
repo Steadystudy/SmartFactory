@@ -56,7 +56,7 @@ export const VisualizationPanel = () => {
     <div className='w-[800px] flex-shrink-0 p-4'>
       <div className='w-full h-full'>
         <Tabs defaultValue='3d' className='w-full h-full'>
-          <TabsList className='grid w-full grid-cols-3'>
+          <TabsList className='grid w-full grid-cols-3 bg-white/10'>
             <TabsTrigger value='3d'>3D View</TabsTrigger>
             <TabsTrigger value='2d'>2D View</TabsTrigger>
             <TabsTrigger value='heatmap'>Heatmap</TabsTrigger>

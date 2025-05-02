@@ -124,11 +124,11 @@ export const ControlPanel = () => {
   }, [missionFilter, amrFilter, stateFilter]);
 
   return (
-    <div className='flex min-w-[300px] grow p-4 bg-gray-100'>
+    <div className='flex min-w-[300px] grow p-4 bg-[#0B1120]'>
       <div className='w-full'>
         <div className='flex gap-2 mb-4'>
           <Select onValueChange={setMissionFilter} defaultValue={FILTER_ALL}>
-            <SelectTrigger className='w-[120px]'>
+            <SelectTrigger className='w-[120px] text-white'>
               <SelectValue placeholder='Mission' />
             </SelectTrigger>
             <SelectContent>
@@ -141,7 +141,7 @@ export const ControlPanel = () => {
           </Select>
 
           <Select onValueChange={setAmrFilter} defaultValue={FILTER_ALL}>
-            <SelectTrigger className='w-[120px]'>
+            <SelectTrigger className='w-[120px] text-white'>
               <SelectValue placeholder='AMR' />
             </SelectTrigger>
             <SelectContent>
@@ -155,7 +155,7 @@ export const ControlPanel = () => {
           </Select>
 
           <Select onValueChange={setStateFilter} defaultValue={FILTER_ALL}>
-            <SelectTrigger className='w-[120px]'>
+            <SelectTrigger className='w-[120px] text-white'>
               <SelectValue placeholder='State' />
             </SelectTrigger>
             <SelectContent>
@@ -168,7 +168,7 @@ export const ControlPanel = () => {
           </Select>
         </div>
 
-        <div className='flex flex-col h-[90%] overflow-y-auto'>
+        <div className='flex flex-col h-[90%] overflow-y-auto hide-scrollbar'>
           {filteredData.map((amr) => (
             <MissionCard key={amr.amrId} data={amr} />
           ))}
