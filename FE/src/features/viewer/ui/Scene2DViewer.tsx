@@ -6,7 +6,7 @@ import { useModelStore } from '@/shared/model/store';
 import { Html } from '@react-three/drei';
 import { AMR_CURRENT_STATE } from '@/features/visualization';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
-import { Map3DEnvironment } from '@/entities/map';
+import { Map3D } from '@/entities/map';
 import { useAMRAnimation, useCameraFollow, AMR_STATE_COLORS } from '../lib';
 
 // AMR 2D 렌더러 컴포넌트
@@ -66,11 +66,12 @@ const Scene2DContent = () => {
       <MapControls
         ref={controlsRef}
         enableZoom={true}
-        minDistance={40}
-        maxDistance={60}
+        minDistance={5}
+        maxDistance={40}
         maxPolarAngle={0}
         minPolarAngle={0}
         enableRotate={false}
+        target={[40, 0, 30]}
       />
     </>
   );
@@ -91,10 +92,10 @@ const Scene2DViewer = () => {
     <div className='w-full h-full cursor-grab active:cursor-grabbing' onClick={handleCanvasClick}>
       <Canvas
         camera={{
-          position: [0, 50, 0],
+          position: [40, 40, 40],
         }}
       >
-        <Map3DEnvironment />
+        <Map3D />
         <Scene2DContent />
       </Canvas>
     </div>

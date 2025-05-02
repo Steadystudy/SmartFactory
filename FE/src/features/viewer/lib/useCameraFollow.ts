@@ -3,6 +3,7 @@ import { MapControls as MapControlsImpl } from 'three-stdlib';
 import { useModelStore } from '@/shared/model/store';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import gsap from 'gsap';
+import * as THREE from 'three';
 
 // 뷰어 타입에 따른 카메라 이동 설정
 interface CameraFollowOptions {
@@ -13,42 +14,72 @@ export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
   const { models } = useModelStore();
   const { selectedAmrId } = useSelectedAMRStore();
   const controlsRef = useRef<MapControlsImpl>(null);
+  const initialRotationRef = useRef<THREE.Euler | null>(null);
 
-  // 선택된 AMR이 변경되면 해당 위치로 카메라 이동
+  // 초기 카메라 설정 저장
   useEffect(() => {
-    // 선택된 AMR이 없거나 controlsRef가 없으면 실행하지 않음
-    if (!selectedAmrId || !controlsRef.current) return;
+    if (!controlsRef.current) return;
+
+    const controls = controlsRef.current;
+    const camera = controls.object;
+
+    // 초기 rotation 저장
+    initialRotationRef.current = camera.rotation.clone();
+
+    return () => {
+      controls.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAmrId || !controlsRef.current || !initialRotationRef.current) return;
 
     const selectedAMR = models.find((model) => model.amrId === selectedAmrId);
     if (selectedAMR) {
-      // 현재 타겟 위치
-      const currentTarget = controlsRef.current.target;
+      const controls = controlsRef.current;
+      const camera = controls.object;
+      const currentTarget = controls.target;
 
-      // 새로운 타겟 위치
+      // 현재 카메라의 상대적 위치 계산
+      const offsetX = camera.position.x - currentTarget.x;
+      const offsetY = camera.position.y - currentTarget.y;
+      const offsetZ = camera.position.z - currentTarget.z;
+
       const newTarget = {
         x: selectedAMR.locationX,
         y: 0,
         z: selectedAMR.locationY,
       };
-      console.log(currentTarget, 'to:', newTarget);
 
-      // 2D 뷰어에서는 회전 없이 이동만 수행
-      if (is2D) {
-        //FIXME: 2D 뷰어에서는 카메라의 회전을 고정
-        controlsRef.current?.target.set(newTarget.x, newTarget.y, newTarget.z);
-        controlsRef.current?.update();
-      } else {
-        // GSAP를 사용하여 부드러운 이동
-        gsap.to(currentTarget, {
-          x: newTarget.x,
-          y: newTarget.y,
-          z: newTarget.z,
-          duration: 1,
-          onUpdate: () => {
-            controlsRef.current?.update();
-          },
-        });
-      }
+      // 새로운 카메라 위치 계산 (상대적 거리 유지)
+      const newCameraPosition = {
+        x: newTarget.x + offsetX,
+        y: newTarget.y + offsetY,
+        z: newTarget.z + offsetZ,
+      };
+
+      // 타겟 위치로 부드럽게 이동
+      gsap.to(currentTarget, {
+        x: newTarget.x,
+        y: newTarget.y,
+        z: newTarget.z,
+        duration: 1,
+      });
+
+      // 카메라 위치도 함께 이동
+      gsap.to(camera.position, {
+        x: newCameraPosition.x,
+        y: newCameraPosition.y,
+        z: newCameraPosition.z,
+        duration: 1,
+        onUpdate: () => {
+          if (controls && controls instanceof MapControlsImpl) {
+            // 초기 rotation 유지
+            camera.rotation.copy(initialRotationRef.current!);
+            controls.update();
+          }
+        },
+      });
     }
   }, [selectedAmrId, models, is2D]);
 
