@@ -90,20 +90,37 @@ def handle_map_info(data, ws):
 
 def handle_mission_assign(data):
     print("[MISSION_ASSIGN] 미션 수신:", data)
-
     mission = data['body']
     target_amr_id = data['header']['amrId']
 
     for amr in amrs:
-        if amr.id == target_amr_id:
+        if amr.id != target_amr_id:
+            continue
+
+        current_id = amr.current_submission_id
+        new_subs = mission["submissions"]
+
+        # 현재 submission ID까지 포함된 인덱스 찾기
+        index = 0
+        for i, sub in enumerate(new_subs):
+            if sub["submissionId"] == current_id:
+                index = i
+                break
+
+        # 현재 수행 중인 submission 이후부터 추가
+        remaining_subs = new_subs[index + 1:]
+
+        # 현재 mission을 덮어쓰되, 이어서 진행할 수 있도록 큐에 push
+        amr.current_mission_id = mission["missionId"]
+        amr.current_mission_type = mission["missionType"]
+        if remaining_subs:
             amr.assign_mission({
                 "missionId": mission["missionId"],
                 "missionType": mission["missionType"],
-                "submissions": mission["submissions"]
-            })
-            return
+                "submissions": remaining_subs
+            }, replace=True)
+        return
 
-    print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
 def handle_mission_cancel(data):
     print("[MISSION_CANCEL] 미션 취소 수신:", data)
@@ -111,10 +128,9 @@ def handle_mission_cancel(data):
 
     for amr in amrs:
         if amr.id == target_amr_id:
+            # 플래그만 세우고 미션큐는 유지
             amr.interrupt_flag = True
             return
-
-    print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
 # ---------- 메시지 처리 함수 ----------
 def handle_traffic_permit(data):
