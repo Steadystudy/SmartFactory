@@ -10,6 +10,10 @@ public interface ConnectService {
 
     void sendMission(String amrId, Map<String, Object> mission) throws IOException;
 
+    void sendTraffic(String amrId, Map<String, Object> traffic) throws IOException;
+
+    void sendMissionCancel(String amrId, Map<String, Object> missionCancel) throws IOException;
+
     Set<String> getConnectedAmrs();
 
 }

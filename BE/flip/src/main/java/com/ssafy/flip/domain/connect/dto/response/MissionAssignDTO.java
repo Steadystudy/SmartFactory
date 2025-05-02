@@ -1,5 +1,8 @@
 package com.ssafy.flip.domain.connect.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 
 public record MissionAssignDTO(
@@ -29,5 +32,16 @@ public record MissionAssignDTO(
             String submissionId,
             String nodeId,
             String edgeId
-    ) {}
+    ) {
+        @JsonCreator
+        public SubmissionDTO(
+            @JsonProperty("submissionId") String submissionId,
+            @JsonProperty("nodeId") String nodeId,
+            @JsonProperty("edgeId") String edgeId
+        ) {
+            this.submissionId = submissionId;
+            this.nodeId = nodeId;
+            this.edgeId = edgeId;
+        }
+    }
 }
