@@ -301,6 +301,10 @@ class AMR:
         self.current_submission_id = None
         self.current_edge_id = None
         self.current_speed = 0
+        if self.current_mission_type == "loading":
+            self.loaded = True
+        elif self.current_mission_type == "unloading":
+            self.loaded = False
         self.update_status()
 
     def move_to_node(self, node, edge):
@@ -445,6 +449,17 @@ class AMR:
         if node["nodeType"] == "docking":
             print(f"🛠️ {self.id} docking 작업 중 (5초)")
             for _ in range(int(5 / REALTIME_INTERVAL)):
+                yield self.env.timeout(REALTIME_INTERVAL)
+
+        # 7. charging 노드에서는 충전
+        if node["nodeType"] == "charging":
+            print(f"🔋 {self.id} 충전 시작 (100초 동안 1%씩)")
+            for _ in range(int(100 / REALTIME_INTERVAL)):  # 100초 = 1초당 1%
+                self.battery += 0.01
+                if self.battery > 100:
+                    self.battery = 100
+                    break
+                self.update_status()
                 yield self.env.timeout(REALTIME_INTERVAL)
 
         with LOCK:
