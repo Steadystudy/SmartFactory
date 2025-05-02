@@ -56,7 +56,7 @@ export interface Model3DProps {
   scale?: number;
   rotation: [number, number, number];
   modelPath: string;
+  modelId: string;
   onClick?: () => void;
   className?: string;
-  linearVelocity: number;
 }

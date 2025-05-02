@@ -1,22 +1,28 @@
 'use client';
 
 import { useGLTF } from '@react-three/drei';
+import { Suspense } from 'react';
+import { LoadingSpinner } from './MapLoading';
 
 export const Map3DEnvironment = () => {
-  const { scene } = useGLTF('/Factory.glb');
-  const { scene: line } = useGLTF('/Line.glb');
+  const { scene } = useGLTF('/FF.glb');
+  // console.log(scene.children[0].children.filter((obj) => obj.name.includes('lane')));
 
   return (
     <>
       {/* 공장 모델 */}
       <primitive
         object={scene}
-        scale={1} // 필요에 따라 스케일 조정
-        position={[0, 39.5, 0]} // 필요에 따라 위치 조정
+        scale={1}
+        position={[0, 0, 0]}
+        rotation={[0, 0, 0]}
+        // onClick={(e) => {
+        // console.log(e.eventObject);
+        // }}
       />
 
-      {/* 라인 모델 */}
-      <primitive object={line} scale={1} position={[0, 1, 0]} />
+      <axesHelper args={[100]} />
+      <gridHelper args={[100, 100]} />
 
       {/* 조명 설정 */}
       <ambientLight intensity={0.3} />
@@ -30,4 +36,13 @@ export const Map3DEnvironment = () => {
   );
 };
 
+export const Map3D = () => {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <Map3DEnvironment />
+    </Suspense>
+  );
+};
+
 useGLTF.preload('/Factory.glb');
+useGLTF.preload('/Line.glb');
