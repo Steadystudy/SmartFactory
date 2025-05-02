@@ -33,7 +33,7 @@ export const mockDashboardData = {
       },
     },
     {
-      title: '창고 내 자재',
+      title: '창고 내 자재 상태',
       value: '75%',
       subtext: ['적재 가능: 25%'],
       data: {
@@ -46,7 +46,7 @@ export const mockDashboardData = {
       },
     },
     {
-      title: '실비 내 자재',
+      title: '설비 가동 상태',
       value: '16대',
       subtext: ['총 20대'],
       data: {
