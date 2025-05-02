@@ -25,7 +25,7 @@ public class ConnectController {
     }
 
     @PostMapping("/mission")
-    public ResponseEntity<String> sendMission(@RequestBody Map<String, Object> mission) {
+    public ResponseEntity<String> missionAssign(@RequestBody Map<String, Object> mission) {
         try {
             connectService.sendMission((String) mission.get("amrId"), mission);
             return ResponseEntity.ok("미션 전송 완료");

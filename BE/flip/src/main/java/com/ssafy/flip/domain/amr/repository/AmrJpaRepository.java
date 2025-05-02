@@ -5,6 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-public interface AmrJpaRepository extends JpaRepository<String, AMR> {
+public interface AmrJpaRepository extends JpaRepository<AMR, String> {
     Optional<AMR> findById(String id);
 }
