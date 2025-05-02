@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/sidebar';
 
 import { type SidebarItem } from '../model/types';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 const items: SidebarItem[] = [
   {
@@ -40,20 +42,22 @@ export function AppSidebar() {
               {/* <div className="flex items-center">
                 <span className="text-xl font-bold text-white">FLIP</span>
               </div> */}
-              <SidebarTrigger />
+              <SidebarTrigger className='cursor-pointer' />
             </SidebarHeader>
             <SidebarSeparator />
             
             {/* Menu Section */}
             <SidebarGroupContent className="mt-4">
-              <SidebarMenu>
+              <SidebarMenu className='flex flex-col'>
                 {items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
-                      <a href={item.url}>
-                        <item.icon />
+                      <Link href={item.url} className='flex items-center py-6'>
+                        <Button variant="ghost" className='px-0 cursor-pointer'>
+                        <item.icon className='size-5'/>
+                        </Button>
                         <span>{item.title}</span>
-                      </a>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
