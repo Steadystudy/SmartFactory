@@ -1,5 +1,6 @@
 package com.ssafy.flip.domain.connect.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.connect.dto.response.*;
 import com.ssafy.flip.domain.connect.handler.AmrWebSocketHandler;
@@ -25,12 +26,53 @@ public class ConnectServiceImpl implements ConnectService {
     public void sendMission(String amrId, Map<String, Object> mission) throws IOException {
         WebSocketSession session = amrSessions.get(amrId);
         if (session != null && session.isOpen()) {
+            Object submissionsObj = mission.get("submissions");
+
+            // LinkedHashMap -> DTO 변환 (명시적)
+            List<MissionAssignDTO.SubmissionDTO> submissions = objectMapper.convertValue(
+                    submissionsObj,
+                    new TypeReference<List<MissionAssignDTO.SubmissionDTO>>() {}
+            );
+
             MissionAssignDTO missionAssignDTO = MissionAssignDTO.of(
-                    (String) mission.get("amrId"),
+                    amrId,
                     (String) mission.get("missionId"),
                     (String) mission.get("missionType"),
-                    (List<MissionAssignDTO.SubmissionDTO>) mission.get("submissions"));
-            String json = objectMapper.writeValueAsString(mission);
+                    submissions
+            );
+
+            String json = objectMapper.writeValueAsString(missionAssignDTO);
+            session.sendMessage(new TextMessage(json));
+        } else {
+            throw new IllegalStateException("해당 AMR이 존재하지 않음 : " + amrId);
+        }
+    }
+
+    @Override
+    public void sendTraffic(String amrId, Map<String, Object> traffic) throws IOException {
+        WebSocketSession session = amrSessions.get(amrId);
+        if (session != null && session.isOpen()) {
+            TrafficPermitDTO trafficPermitDTO = TrafficPermitDTO.of(
+                    amrId,
+                    (String) traffic.get("missionId"),
+                    (Integer) traffic.get("submissionId"),
+                    (Integer) traffic.get("nodeId")
+            );
+            String json = objectMapper.writeValueAsString(trafficPermitDTO);
+            session.sendMessage(new TextMessage(json));
+        } else {
+            throw new IllegalStateException("해당 AMR이 존재하지 않음 : " + amrId);
+        }
+    }
+
+    @Override
+    public void sendMissionCancel(String amrId, Map<String, Object> missionCancel) throws IOException {
+        WebSocketSession session = amrSessions.get(amrId);
+        if (session != null && session.isOpen()) {
+            MissionCancelDTO missionCancelDTO = MissionCancelDTO.of(
+                    amrId,
+                    (String) missionCancel.get("state"));
+            String json = objectMapper.writeValueAsString(missionCancelDTO);
             session.sendMessage(new TextMessage(json));
         } else {
             throw new IllegalStateException("해당 AMR이 존재하지 않음 : " + amrId);

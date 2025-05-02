@@ -33,4 +33,24 @@ public class ConnectController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("전송 실패: " + e.getMessage());
         }
     }
+
+    @PostMapping("/traffic")
+    public ResponseEntity<String> trafficPermit(@RequestBody Map<String, Object> mission) {
+        try {
+            connectService.sendTraffic((String) mission.get("amrId"), mission);
+            return ResponseEntity.ok("교통 제어 전송 완료");
+        } catch (IOException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("전송 실패: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/cancel")
+    public ResponseEntity<String> missionCancel(@RequestBody Map<String, Object> missionCancel) {
+        try {
+            connectService.sendMissionCancel((String) missionCancel.get("amrId"), missionCancel);
+            return ResponseEntity.ok("미션 취소 완료");
+        } catch (IOException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("전송 실패: " + e.getMessage());
+        }
+    }
 }
