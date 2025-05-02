@@ -37,6 +37,7 @@ public class StatusServiceImpl implements StatusService{
     private final MissionLogService missionLogService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Override
