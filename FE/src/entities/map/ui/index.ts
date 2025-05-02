@@ -1,1 +1,1 @@
-export { Map3DEnvironment } from './Map3DEnvironment';
+export { Map3D } from './Map3DEnvironment';

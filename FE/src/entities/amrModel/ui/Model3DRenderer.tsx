@@ -2,7 +2,6 @@
 
 import { AMRModel, SSF250Model, SSF1200Model, ModelType } from '@/entities/amrModel';
 import { AMR_CURRENT_STATE } from '@/features/visualization';
-import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 
 const ANIMATION_SETTINGS = {
   height: 0,
@@ -14,8 +13,6 @@ interface Model3DRendererProps {
 }
 
 export const Model3DRenderer = ({ amrInfo, type = 'amr' }: Model3DRendererProps) => {
-  const { setSelectedAmrId } = useSelectedAMRStore();
-
   // 모델 타입에 따라 적절한 컴포넌트 렌더링
   const renderModel = () => {
     const position: [number, number, number] = [
@@ -27,33 +24,12 @@ export const Model3DRenderer = ({ amrInfo, type = 'amr' }: Model3DRendererProps)
 
     switch (type) {
       case 'ssf250':
-        return (
-          <SSF250Model
-            position={position}
-            rotation={rotation}
-            linearVelocity={amrInfo.linearVelocity}
-            onClick={() => setSelectedAmrId(amrInfo.amrId)}
-          />
-        );
+        return <SSF250Model position={position} rotation={rotation} modelId={amrInfo.amrId} />;
       case 'ssf1200':
-        return (
-          <SSF1200Model
-            position={position}
-            rotation={rotation}
-            linearVelocity={amrInfo.linearVelocity}
-            onClick={() => setSelectedAmrId(amrInfo.amrId)}
-          />
-        );
+        return <SSF1200Model position={position} rotation={rotation} modelId={amrInfo.amrId} />;
       case 'amr':
       default:
-        return (
-          <AMRModel
-            position={position}
-            rotation={rotation}
-            linearVelocity={amrInfo.linearVelocity}
-            onClick={() => setSelectedAmrId(amrInfo.amrId)}
-          />
-        );
+        return <AMRModel position={position} rotation={rotation} modelId={amrInfo.amrId} />;
     }
   };
 
