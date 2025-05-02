@@ -15,7 +15,7 @@ LOCK = threading.Lock()   # 공유 자원 보호
 map_data = None
 amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
-
+NODE_RESERVATIONS = {}
 
 
 # ---------- 메시지 핸들러 ----------
@@ -116,6 +116,7 @@ def handle_mission_cancel(data):
 
     print(f"❌ {target_amr_id} AMR을 찾을 수 없습니다.")
 
+# ---------- 메시지 처리 함수 ----------
 def handle_traffic_permit(data):
     permit = data['body']
     mission_id = permit["missionId"]
@@ -126,7 +127,16 @@ def handle_traffic_permit(data):
         if (amr.current_mission_id == mission_id and
                 amr.current_submission_id == submission_id and
                 amr.waiting_for_traffic == (mission_id, submission_id, node_id)):
-            print(f"✅ {amr.id} - 이동 허가 수신 (Node: {node_id})")
+
+            with LOCK:
+                reserved = NODE_RESERVATIONS.get(node_id)
+                if reserved and reserved != amr.id:
+                    print(f"🛑 {amr.id} 접근 차단: 노드 {node_id}는 {reserved}가 예약 중")
+                    return
+                else:
+                    NODE_RESERVATIONS[node_id] = amr.id
+                    print(f"✅ {amr.id} 노드 {node_id} 접근 예약됨")
+
             amr.traffic_event.set()
             break
 
@@ -157,6 +167,32 @@ def compute_intersecting_edges(map_data):
 
     return intersecting_edge_pairs
 
+def detect_deadlock_and_get_core_amr(threshold=10):
+    with LOCK:
+        blocked_amrs = []
+        for amr in amrs:
+            if amr.state != 2:
+                continue
+            if amr.is_blocked_by_leading_amr():
+                blocked_amrs.append((amr.id, SHARED_STATUS[amr.id]["timestamp"]))
+
+        if len(blocked_amrs) >= threshold:
+            blocked_amrs.sort(key=lambda x: x[1])
+            return blocked_amrs[0][0]  # 가장 오래된 AMR id
+    return None
+
+
+# ---------- 데드락 감지 루프 ----------
+def deadlock_monitor():
+    while True:
+        time.sleep(2)
+        core_amr_id = detect_deadlock_and_get_core_amr()
+        if core_amr_id:
+            print(f"🧩 데드락 감지됨! 중심 AMR: {core_amr_id}")
+            for amr in amrs:
+                if amr.id == core_amr_id:
+                    amr.env.process(amr.trigger_deadlock_avoidance())
+
 def start_simulation():
     global amrs  # ✅ 전역 변수 사용 선언!
 
@@ -170,7 +206,7 @@ def start_simulation():
 
     threading.Thread(target=broadcast_status, daemon=True).start()
     threading.Thread(target=lambda: env.run(), daemon=True).start()
-
+    threading.Thread(target=deadlock_monitor, daemon=True).start()
 
 # ---------- AMR 클래스 ----------
 class AMR:
@@ -355,6 +391,12 @@ class AMR:
                 yield from self.avoid_and_recover(dx, dy, speed, target_dir)
                 continue
 
+            if self.is_blocked_by_leading_amr():
+                print(f"🟡 {self.id} 앞 차량 정지 감지 → 대기 중")
+                while self.is_blocked_by_leading_amr():
+                    yield self.env.timeout(REALTIME_INTERVAL)
+                print(f"🟢 {self.id} 앞 차량 출발 감지 → 재이동 시작")
+
             # 정상 이동
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
@@ -405,8 +447,9 @@ class AMR:
             for _ in range(int(5 / REALTIME_INTERVAL)):
                 yield self.env.timeout(REALTIME_INTERVAL)
 
-
-
+        with LOCK:
+            if NODE_RESERVATIONS.get(self.current_node_id) == self.id:
+                del NODE_RESERVATIONS[self.current_node_id]
 
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
@@ -451,6 +494,30 @@ class AMR:
                         return "avoid"
         return None
 
+    def is_blocked_by_leading_amr(self):
+        with LOCK:
+            for other_id, other in SHARED_STATUS.items():
+                if other_id == self.id:
+                    continue
+
+                if other.get("currentEdge") != self.current_edge_id:
+                    continue
+
+                # 거리 계산
+                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                if dist > 1.5:  # 너무 멀면 무시
+                    continue
+
+                # 내 앞에 있고 같은 방향이면
+                angle_to_other = math.degrees(math.atan2(other["y"] - self.pos_y, other["x"] - self.pos_x)) % 360
+                my_dir_std = (90 - self.dir) % 360
+                angle_diff = abs((angle_to_other - my_dir_std + 360) % 360)
+
+                if angle_diff < 60:  # 60도 이내 → 정면
+                    if other["speed"] < 0.01:  # 정지 상태
+                        return True
+        return False
+
     def wait_until_clear(self, intersecting_edge_pairs):
         while self.is_intersection_conflict(intersecting_edge_pairs) == "wait":
             yield self.env.timeout(REALTIME_INTERVAL)
@@ -479,6 +546,41 @@ class AMR:
         self.is_avoiding = False
         self.dir = target_dir
         self.update_status()
+
+    def trigger_deadlock_avoidance(self):
+        if self.is_avoiding:
+            return
+
+        self.is_avoiding = True
+        print(f"↩️ {self.id} 데드락 회피 시작")
+
+        angle_rad = math.radians((90 - self.dir) % 360)
+        offset_angle = angle_rad + math.pi / 2
+        target_x = self.pos_x + math.cos(offset_angle) * 1.0
+        target_y = self.pos_y + math.sin(offset_angle) * 1.0
+
+        dx = target_x - self.pos_x
+        dy = target_y - self.pos_y
+        steps = int(
+            self.get_distance(self.pos_x, self.pos_y, target_x, target_y) / (self.current_speed * REALTIME_INTERVAL))
+
+        for _ in range(steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x += dx / steps
+            self.pos_y += dy / steps
+            self.update_status()
+
+        while detect_deadlock_and_get_core_amr() is not None:
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+        for _ in range(steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x -= dx / steps
+            self.pos_y -= dy / steps
+            self.update_status()
+
+        self.is_avoiding = False
+        print(f"✅ {self.id} 데드락 회피 완료")
 
     def get_offset_position(self, x, y, offset=0.6):
         angle_rad = math.radians((90 - self.dir) % 360)
@@ -524,7 +626,7 @@ def broadcast_status():
             for i, (amr_id, status) in enumerate(SHARED_STATUS.items()):
                 message = {
                     "header": {
-                        "msgName": "AGV_STATE",
+                        "msgName": "AMR_STATE",
                         "time": now
                     },
                     "body": {
