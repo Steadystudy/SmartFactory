@@ -122,4 +122,40 @@
   main {
     @apply bg-[#020817];
   }
+
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/50 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    @apply bg-sidebar-accent;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-sidebar-foreground/50;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-sidebar-foreground;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
 }

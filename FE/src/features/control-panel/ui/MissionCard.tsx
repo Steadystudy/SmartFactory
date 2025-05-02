@@ -61,7 +61,7 @@ export const MissionCard = ({ data }: MissionCardProps) => {
   return (
     <Card
       className={cn(
-        'w-full p-4 mb-4 cursor-pointer transition-colors',
+        'bg-white/10 w-full p-4 mb-4 cursor-pointer transition-colors',
         selectedAmrId === data.amrId && 'border-2 border-blue-500',
       )}
       onClick={handleCardClick}
@@ -85,11 +85,11 @@ export const MissionCard = ({ data }: MissionCardProps) => {
 
       <div className='mb-4'>
         <div className='flex justify-between mb-2'>
-          <span className='text-sm text-gray-600'>예상 도착 시간</span>
+          <span className='text-sm text-white '>예상 도착 시간</span>
           <span className='text-sm'>{formatTime(data.expectedArrival)}</span>
         </div>
         <div className='flex justify-between'>
-          <span className='text-sm text-gray-600'>현재 위치</span>
+          <span className='text-sm text-white '>현재 위치</span>
           <span className='text-sm'>
             ({data.startX.toFixed(2)}, {data.startY.toFixed(2)})
           </span>
@@ -97,8 +97,8 @@ export const MissionCard = ({ data }: MissionCardProps) => {
       </div>
 
       <div className='flex gap-2'>
-        <span className='px-2 py-1 text-xs bg-gray-100 rounded-md'>{data.amrId}</span>
-        <span className='px-2 py-1 text-xs bg-gray-100 rounded-md'>{data.type}</span>
+        <span className='px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-md'>{data.amrId}</span>
+        <span className='px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-md'>{data.type}</span>
         {data.errorCode && (
           <span className='px-2 py-1 text-xs text-red-600 bg-red-100 rounded-md'>
             {data.errorCode}
