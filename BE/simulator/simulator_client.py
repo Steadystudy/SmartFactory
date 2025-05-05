@@ -44,7 +44,7 @@ def on_message(ws, message):
 # ---------- WebSocket 서버 ----------
 def make_ws_client():
     return websocket.WebSocketApp(
-        "ws://localhost:8080/ws/amr",
+        "ws://k12s110.p.ssafy.io:8081/ws/amr",
         on_message=on_message,
         on_open=on_open,
         on_close=on_close
@@ -665,16 +665,15 @@ def broadcast_status():
                         "worldY": status["y"],
                         "dir": status["dir"],
                         "amrId": status["id"],
-                        "type": status["type"],
                         "state": status["state"],
                         "battary": status["battery"],
                         "currentNode": status.get("currentNode", ""),
-                        "loading": "1" if status["loaded"] else "0",
+                        "loading": True if status["loaded"] else False,
                         "missionId": status.get("missionId", ""),
                         "submissionId": status.get("submissionId", ""),
                         "linearVelocity": status.get("speed", 0),
                         "missionType": status.get("missionType", 0),
-                        "errorList": []
+                        "errorList": ""
                     }
                 }
                 if i < len(ws_clients):
