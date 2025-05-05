@@ -26,11 +26,11 @@ public class Route {
     private MissionLog missionLog;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "node_id", nullable = false)
     private Node nodeId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "edge_id", nullable = false)
     private Edge edgeId;
 
     @Column(name = "started_at", nullable = false)
