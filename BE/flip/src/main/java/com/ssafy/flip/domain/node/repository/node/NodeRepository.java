@@ -11,4 +11,6 @@ public interface NodeRepository {
 
     Optional<Node> findById(Integer nodeId);
 
+    Node getReferenceById(Integer nodeId);
+
 }
