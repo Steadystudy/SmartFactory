@@ -126,11 +126,11 @@ public class StatusServiceImpl implements StatusService{
       "missionType": "MOVING",
       "expectedArrival": 18.83,
       "routes": [
-         { "nodeId": 191 },
-         { "nodeId": 190 },
-         { "nodeId": 189 },
-         { "nodeId": 173 },
-         { "nodeId": 41 }
+         { "nodeId": 1 },
+         { "nodeId": 2 },
+         { "nodeId": 4 },
+         { "nodeId": 5 },
+         { "nodeId": 9 }
       ]
    }
 }
