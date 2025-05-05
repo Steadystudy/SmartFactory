@@ -1,5 +1,7 @@
 package com.ssafy.flip.domain.log.entity;
 
+import com.ssafy.flip.domain.node.entity.Edge;
+import com.ssafy.flip.domain.node.entity.Node;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -8,7 +10,7 @@ import java.time.LocalDateTime;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-@Builder(access = AccessLevel.PROTECTED)
+@Builder
 @Entity
 @EqualsAndHashCode(of = "routeId")
 @Table
@@ -21,13 +23,15 @@ public class Route {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mission_log_id", nullable = false)
-    private MissionLog missionlog;
+    private MissionLog missionLog;
 
-    @Column(name = "node_id", nullable = false)
-    private Integer nodeId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "node_id", nullable = false)
+    private Node nodeId;
 
-    @Column(name = "edge_id", nullable = false)
-    private Integer edgeId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "edge_id", nullable = false)
+    private Edge edgeId;
 
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
