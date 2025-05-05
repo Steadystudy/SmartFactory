@@ -86,7 +86,7 @@ public class StatusServiceImpl implements StatusService{
                 .y(amrSaveRequestDTO.body().worldY())
                 .direction(amrSaveRequestDTO.body().dir())
                 .state(amrSaveRequestDTO.body().state())
-                .battery(amrSaveRequestDTO.body().battary())
+                .battery(amrSaveRequestDTO.body().battery())
                 .loading(amrSaveRequestDTO.body().loading())
                 .linearVelocity(amrSaveRequestDTO.body().linearVelocity())
                 .currentNode(amrSaveRequestDTO.body().currentNode())

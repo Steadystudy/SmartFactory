@@ -22,4 +22,10 @@ public class NodeRepositoryImpl implements NodeRepository {
     public Optional<Node> findById(Integer nodeId) {
         return nodeJpaRepository.findById(nodeId);
     }
+
+    @Override
+    public Node getReferenceById(Integer nodeId) {
+        return nodeJpaRepository.getReferenceById(nodeId);
+    }
+
 }
