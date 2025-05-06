@@ -11,4 +11,6 @@ public interface EdgeRepository {
 
     Optional<Edge> findById(Integer edgeId);
 
+    Edge getReferenceById(Integer edgeId);
+
 }

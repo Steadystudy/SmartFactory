@@ -22,4 +22,10 @@ public class EdgeRepositoryImpl implements EdgeRepository{
     public Optional<Edge> findById(Integer edgeId) {
         return edgeJpaRepository.findById(edgeId);
     }
+
+    @Override
+    public Edge getReferenceById(Integer edgeId) {
+        return edgeJpaRepository.getReferenceById(edgeId);
+    }
+
 }
