@@ -1,7 +1,13 @@
 package com.ssafy.flip.domain.connect.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.flip.domain.amr.entity.AMR;
+import com.ssafy.flip.domain.connect.dto.request.RouteTempDTO;
 import com.ssafy.flip.domain.connect.service.WebSocketService;
+import com.ssafy.flip.domain.log.entity.MissionLog;
+import com.ssafy.flip.domain.log.entity.Route;
+import com.ssafy.flip.domain.log.service.mission.MissionLogService;
+import com.ssafy.flip.domain.mission.entity.Mission;
 import com.ssafy.flip.domain.status.dto.request.AmrSaveRequestDTO;
 import com.ssafy.flip.domain.status.dto.request.MissionRequestDto;
 import com.ssafy.flip.domain.status.service.StatusService;
@@ -12,6 +18,10 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,6 +36,13 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private final WebSocketService webSocketService;
     private final StatusService statusService;
+    private final MissionLogService missionLogService;
+
+
+    private final Map<String, Integer> lastSubmissionMap = new ConcurrentHashMap<>();
+    private final Map<String, LocalDateTime> submissionStartMap = new ConcurrentHashMap<>();
+    private final Map<String, List<RouteTempDTO>> routeTempMap = new ConcurrentHashMap<>();
+
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -57,19 +74,58 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private void handleAmrState(Map<String, Object> json, WebSocketSession session) {
         try {
-            // 1. 세션 저장
             Map<String, Object> body = (Map<String, Object>) json.get("body");
             String amrId = (String) body.get("amrId");
             amrSessions.put(amrId, session);
 
-            // 2. 전체 JSON → DTO로 변환
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
 
-            // 3. 알고리즘 서버에서 미션 경로 정보 가져오기
             int missionId = amrDto.body().missionId();
-            MissionRequestDto missionRequestDto = statusService.Algorithim(missionId); // 더미 OK
+            Integer currentSubmission = amrDto.body().submissionId();
+            int nodeId = amrDto.body().currentNode();
+            int edgeId = amrDto.body().currentEdge();
 
-            // 4. 기존 로직 호출
+            Integer lastSubmission = lastSubmissionMap.get(amrId);
+
+            // 🔄 submission 변경 감지
+            if (lastSubmission != null && !lastSubmission.equals(currentSubmission)) {
+                LocalDateTime now = LocalDateTime.now();
+
+                // 이전 submission의 RouteTemp 저장
+                routeTempMap.computeIfAbsent(amrId, k -> new ArrayList<>()).add(
+                        RouteTempDTO.builder()
+                                .missionId(missionId)
+                                .submissionId(lastSubmission)
+                                .nodeId(nodeId)
+                                .edgeId(edgeId)
+                                .startedAt(submissionStartMap.get(amrId))
+                                .endedAt(now)
+                                .build()
+                );
+
+                submissionStartMap.put(amrId, now);
+                lastSubmissionMap.put(amrId, currentSubmission);
+            } else if (lastSubmission == null) {
+                submissionStartMap.put(amrId, LocalDateTime.now());
+                lastSubmissionMap.put(amrId, currentSubmission);
+            }
+
+            // ✅ 미션 종료 감지 (state == 1 → IDLE)
+            if (amrDto.body().state() == 1) {
+                List<RouteTempDTO> routeTemps = routeTempMap.get(amrId);
+                if (routeTemps != null && !routeTemps.isEmpty()) {
+                    missionLogService.saveWithRoutes(amrId, missionId, routeTemps);
+
+                    // 정리
+                    routeTempMap.remove(amrId);
+                    submissionStartMap.remove(amrId);
+                    lastSubmissionMap.remove(amrId);
+                }
+            }
+
+
+            // 기존 처리
+            MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);
             statusService.saveAmr(amrDto, missionRequestDto);
 
         } catch (Exception e) {

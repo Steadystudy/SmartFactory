@@ -668,6 +668,7 @@ def broadcast_status():
                         "state": status["state"],
                         "battary": status["battery"],
                         "currentNode": status.get("currentNode", ""),
+                        "currentEdge": status.get("currentEdge", ""),
                         "loading": True if status["loaded"] else False,
                         "missionId": status.get("missionId", ""),
                         "submissionId": status.get("submissionId", ""),
