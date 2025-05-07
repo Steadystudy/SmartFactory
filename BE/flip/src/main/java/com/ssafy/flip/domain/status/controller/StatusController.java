@@ -19,7 +19,7 @@ public class StatusController {
     @PostMapping("/amr/test")
     public ResponseEntity<Object> saveAmr(@RequestBody AmrSaveRequestDTO amrSaveRequestDTO){
         //카프카 들고올
-        int missionId = amrSaveRequestDTO.body().missionId();
+        String missionId = amrSaveRequestDTO.body().missionId();
         //misionId로 알고리즘 서버를 통해서 경로를 들고와야함
         MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);  // 더미 호출
 

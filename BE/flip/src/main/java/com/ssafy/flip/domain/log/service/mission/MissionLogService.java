@@ -17,6 +17,6 @@ public interface MissionLogService {
 
     MissionLog addMissionLog(AddMissionLogRequestDTO requestDTO);
 
-    MissionLog saveWithRoutes(String amrId, int missionId, List<RouteTempDTO> routes);
+    MissionLog saveWithRoutes(String amrId, String missionId, List<RouteTempDTO> routes);
 
 }
