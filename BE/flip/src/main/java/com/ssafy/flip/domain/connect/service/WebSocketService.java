@@ -4,4 +4,5 @@ public interface WebSocketService {
 
     String sendMapInfo();
 
+    String missionAssign(String amrId);
 }
