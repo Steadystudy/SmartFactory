@@ -10,6 +10,7 @@ import com.ssafy.flip.domain.status.service.StatusService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -73,6 +74,28 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 break;
             default:
                 System.out.println("Unknown message: " + msgName);
+        }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        System.out.println("AMR 연결 종료: " + session.getId());
+
+        // 연결이 끊긴 session과 매칭되는 amrId를 찾기
+        String disconnectedAmrId = null;
+        for (Map.Entry<String, WebSocketSession> entry : amrSessions.entrySet()) {
+            if (entry.getValue().getId().equals(session.getId())) {
+                disconnectedAmrId = entry.getKey();
+                break;
+            }
+        }
+
+        if (disconnectedAmrId != null) {
+            amrSessions.remove(disconnectedAmrId);
+            lastSubmissionMap.remove(disconnectedAmrId);
+            submissionStartMap.remove(disconnectedAmrId);
+            routeTempMap.remove(disconnectedAmrId);
+            System.out.println("🧹 AMR 데이터 정리 완료: " + disconnectedAmrId);
         }
     }
 
