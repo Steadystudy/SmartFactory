@@ -51,19 +51,29 @@ public class ConnectServiceImpl implements ConnectService {
     @Override
     public void sendTraffic(String amrId, Map<String, Object> traffic) throws IOException {
         WebSocketSession session = amrSessions.get(amrId);
-        if (session != null && session.isOpen()) {
-            TrafficPermitDTO trafficPermitDTO = TrafficPermitDTO.of(
-                    amrId,
-                    (String) traffic.get("missionId"),
-                    (Integer) traffic.get("submissionId"),
-                    (Integer) traffic.get("nodeId")
-            );
-            String json = objectMapper.writeValueAsString(trafficPermitDTO);
-            session.sendMessage(new TextMessage(json));
-        } else {
-            throw new IllegalStateException("해당 AMR이 존재하지 않음 : " + amrId);
+
+        if (session == null) {
+            throw new IllegalStateException("❌ AMR 세션 없음: " + amrId);
         }
+
+        if (!session.isOpen()) {
+            throw new IllegalStateException("❌ 세션이 닫힘: " + amrId);
+        }
+
+        // ✅ 필요한 값 추출
+        String missionId = (String) traffic.get("missionId");
+        Integer submissionId = (Integer) traffic.get("submissionId");
+        Integer nodeId = (Integer) traffic.get("nodeId");
+
+        // ✅ DTO 생성 및 직렬화
+        TrafficPermitDTO dto = TrafficPermitDTO.of(amrId, missionId, submissionId, nodeId);
+        String json = objectMapper.writeValueAsString(dto);
+
+        // ✅ 전송
+        session.sendMessage(new TextMessage(json));
+        System.out.println("✅ TRAFFIC_PERMIT 전송됨 → AMR: " + amrId + ", 노드: " + nodeId);
     }
+
 
     @Override
     public void sendMissionCancel(String amrId, Map<String, Object> missionCancel) throws IOException {

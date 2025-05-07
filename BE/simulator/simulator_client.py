@@ -16,6 +16,7 @@ map_data = None
 amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
+simulation_started = False
 
 
 # ---------- 메시지 핸들러 ----------
@@ -54,7 +55,7 @@ ws_clients = [make_ws_client() for _ in range(20)]
 
 # ---------- 메시지 처리 함수 ----------
 def handle_map_info(data, ws):
-    global map_data
+    global map_data, simulation_started
 
     print("[MAP_INFO] 맵 데이터 수신 완료")
     raw_map = data['body']['mapData']
@@ -85,8 +86,12 @@ def handle_map_info(data, ws):
     }
 
     INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
-    print("✅ 맵 저장 완료! 시뮬레이션 시작")
-    start_simulation()
+    if not simulation_started:
+        simulation_started = True
+        print("✅ 맵 저장 완료! 시뮬레이션 시작")
+        start_simulation()
+    else:
+        print("⚠️ 시뮬레이션 이미 시작됨, 재시작 생략")
 
 def handle_mission_assign(data):
     print("[MISSION_ASSIGN] 미션 수신:", data)
@@ -226,7 +231,7 @@ def start_simulation():
 
 # ---------- AMR 클래스 ----------
 class AMR:
-    def __init__(self, env, amr_id, map_data, pos_x, pos_y, type):
+    def __init__(self, env, amr_id, map_data, pos_x, pos_y, type, current_node_id):
         self.env = env
         self.id = amr_id
         self.map_data = map_data
@@ -245,7 +250,7 @@ class AMR:
         self.current_submission_id = None
         self.current_speed = 0
         self.loaded = False
-        self.current_node_id = None
+        self.current_node_id = current_node_id
         self.type = type
         self.waiting_for_traffic = None  # (missionId, submissionId, nodeId)
         self.traffic_event = threading.Event()
@@ -636,7 +641,7 @@ def setup_amrs(env, map_data):
     for i, (x, y) in enumerate(amr_start_positions):
         amr_id = f"AMR{str(i + 1).zfill(3)}"
         amr_type = 0 if i < 10 else 1  # 0번~9번 → type=0, 10번~19번 → type=1
-        amr = AMR(env, amr_id, map_data, x, y, type=amr_type)
+        amr = AMR(env, amr_id, map_data, x, y, amr_type, i+61)
         amr.update_status()
         env.process(amr.run())
         amrs.append(amr)
@@ -666,7 +671,7 @@ def broadcast_status():
                         "dir": status["dir"],
                         "amrId": status["id"],
                         "state": status["state"],
-                        "battary": status["battery"],
+                        "battery": status["battery"],
                         "currentNode": status.get("currentNode", ""),
                         "currentEdge": status.get("currentEdge", ""),
                         "loading": True if status["loaded"] else False,
