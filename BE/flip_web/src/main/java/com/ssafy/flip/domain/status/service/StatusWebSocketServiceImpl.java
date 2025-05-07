@@ -9,6 +9,7 @@ import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -25,14 +26,15 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
     private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisRepository amrStatusRedisRepository;
 
-    @PostConstruct
-    public void startRealTimeBroadcast() {
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
-                this::broadcastRealTimeStatus,
-                0, 1, TimeUnit.SECONDS
-        );
-    }
+//    @PostConstruct
+//    public void startRealTimeBroadcast() {
+//        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
+//                this::broadcastRealTimeStatus,
+//                0, 1, TimeUnit.SECONDS
+//        );
+//    }
 
+    @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
         Iterable<AmrStatusRedis> amrStatusIterable = amrStatusRedisRepository.findAll();
         List<AmrRealTimeDTO> amrRealTimeDTOList = new ArrayList<>();
@@ -42,7 +44,6 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
         }
 
         AmrRealTimeResponseDTO response = new AmrRealTimeResponseDTO(amrRealTimeDTOList);
-
         messagingTemplate.convertAndSend("/amr/real-time", response);
     }
 

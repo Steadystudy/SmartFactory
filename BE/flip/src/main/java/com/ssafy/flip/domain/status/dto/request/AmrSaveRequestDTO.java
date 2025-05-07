@@ -1,8 +1,5 @@
 package com.ssafy.flip.domain.status.dto.request;
 
-import org.springframework.data.annotation.Id;
-
-import java.util.List;
 
 public record AmrSaveRequestDTO(
         Header header,

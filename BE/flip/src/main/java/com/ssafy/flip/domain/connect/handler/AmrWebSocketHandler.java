@@ -81,7 +81,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             Map<String, Object> body = (Map<String, Object>) json.get("body");
             String amrId = (String) body.get("amrId");
             amrSessions.put(amrId, session);
-
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
 
             int missionId = amrDto.body().missionId();
@@ -124,6 +123,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);
             statusService.saveAmr(amrDto, missionRequestDto);
 
+            String missionInfoJson = webSocketService.missionAssign(amrId);
+            session.sendMessage(new TextMessage(missionInfoJson));
+
             Integer currentNode = amrDto.body().currentNode();
             Integer previousNode = previousNodeMap.put(amrId, currentNode);
 
@@ -140,7 +142,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     }
                 }
             }
-
         } catch (Exception e) {
             System.err.println("AMR_STATE 처리 실패: " + e.getMessage());
         }
