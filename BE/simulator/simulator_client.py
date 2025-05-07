@@ -683,6 +683,7 @@ def broadcast_status():
                     }
                 }
                 if i < len(ws_clients):
+                    print(amr_id+": "+str(message))
                     ws_clients[i].send(json.dumps(message))
         time.sleep(0.1)
 
