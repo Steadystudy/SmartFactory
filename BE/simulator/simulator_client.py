@@ -11,7 +11,7 @@ from datetime import datetime
 # ---------- 설정 ----------
 REALTIME_INTERVAL = 0.01  # 좌표 갱신 주기 (초)
 SHARED_STATUS = {}        # 모든 AMR의 실시간 위치 상태
-LOCK = threading.Lock()   # 공유 자원 보호
+LOCK = threading.RLock()   # 공유 자원 보호
 map_data = None
 amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
@@ -56,42 +56,43 @@ ws_clients = [make_ws_client() for _ in range(20)]
 # ---------- 메시지 처리 함수 ----------
 def handle_map_info(data, ws):
     global map_data, simulation_started
-
-    print("[MAP_INFO] 맵 데이터 수신 완료")
-    raw_map = data['body']['mapData']
-
-    nodes = {}
-    for node in raw_map['areas']['nodes']:
-        nodes[str(node['nodeId'])] = {
-            'id': node['nodeId'],
-            'x': node['worldX'],
-            'y': node['worldY'],
-            'nodeName' : node['nodeName'],
-            'nodeType' : node['nodeType'],
-            'direction': node['direction']
-        }
-
-    edges = {}
-    for edge in raw_map['areas']['edges']:
-        edges[str(edge['edgeId'])] = {
-            'node1': edge['node1'],
-            'node2': edge['node2'],
-            'speed': edge['speed'],
-            'edgeDirection': edge['edgeDirection']
-        }
-
-    map_data = {
-        "nodes": nodes,
-        "edges": edges
-    }
-
-    INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
     if not simulation_started:
+        print("[MAP_INFO] 맵 데이터 수신 완료")
+        raw_map = data['body']['mapData']
+
+        nodes = {}
+        for node in raw_map['areas']['nodes']:
+            nodes[str(node['nodeId'])] = {
+                'id': node['nodeId'],
+                'x': node['worldX'],
+                'y': node['worldY'],
+                'nodeName' : node['nodeName'],
+                'nodeType' : node['nodeType'],
+                'direction': node['direction']
+            }
+
+        edges = {}
+        for edge in raw_map['areas']['edges']:
+            edges[str(edge['edgeId'])] = {
+                'node1': edge['node1'],
+                'node2': edge['node2'],
+                'speed': edge['speed'],
+                'edgeDirection': edge['edgeDirection']
+            }
+
+        map_data = {
+            "nodes": nodes,
+            "edges": edges
+        }
+
+        INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
+
         simulation_started = True
         print("✅ 맵 저장 완료! 시뮬레이션 시작")
         start_simulation()
     else:
         print("⚠️ 시뮬레이션 이미 시작됨, 재시작 생략")
+
 
 def handle_mission_assign(data):
     print("[MISSION_ASSIGN] 미션 수신:", data)
@@ -102,28 +103,18 @@ def handle_mission_assign(data):
         if amr.id != target_amr_id:
             continue
 
-        current_id = amr.current_submission_id
-        new_subs = mission["submissions"]
-
-        # 현재 submission ID까지 포함된 인덱스 찾기
-        index = 0
-        for i, sub in enumerate(new_subs):
-            if sub["submissionId"] == current_id:
-                index = i
-                break
-
-        # 현재 수행 중인 submission 이후부터 추가
-        remaining_subs = new_subs[index + 1:]
-
-        # 현재 mission을 덮어쓰되, 이어서 진행할 수 있도록 큐에 push
-        amr.current_mission_id = mission["missionId"]
-        amr.current_mission_type = mission["missionType"]
-        if remaining_subs:
+        # ✅ AMR이 IDLE 상태일 때만 미션을 수락
+        if amr.state == 1:  # 1 = IDLE
+            amr.current_mission_id = mission["missionId"]
+            amr.current_mission_type = mission["missionType"]
             amr.assign_mission({
                 "missionId": mission["missionId"],
                 "missionType": mission["missionType"],
-                "submissions": remaining_subs
+                "submissions": mission["submissions"]
             }, replace=True)
+            print(f"✅ {amr.id} 미션 수락 완료")
+        else:
+            print(f"🚫 {amr.id} 미션 무시 (현재 진행 중)")
         return
 
 
@@ -161,6 +152,26 @@ def handle_traffic_permit(data):
             amr.traffic_event.set()
             break
 
+
+def safe_send(ws, message, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            # 연결 상태 확인
+            if ws.sock and ws.sock.connected:
+                ws.send(json.dumps(message))
+                return True
+            else:
+                raise websocket.WebSocketConnectionClosedException()
+        except websocket.WebSocketConnectionClosedException:
+            print(f"[WARN] 소켓 닫힘, 재연결 시도 {attempt+1}/{max_retries}")
+            try:
+                # 재연결: 기존 ws 객체를 사용해 다시 여는 방법
+                ws.run_forever()
+                # — 또는 websocket.create_connection(ws.url) 로 새로 생성
+            except Exception as e:
+                print(f"[ERROR] 재연결 실패: {e}")
+    print("[ERROR] 최대 재시도 후에도 전송 실패")
+    return False
 # ---------- 교차 간선 계산 ----------
 def edges_intersect(p1, p2, q1, q2):
     def ccw(a, b, c):
@@ -310,8 +321,8 @@ class AMR:
             # ✅ 여기에 넣으세요
             self.current_edge_id = sub["edgeId"]
 
-            node = self.map_data["nodes"][sub["nodeId"]]
-            edge = self.map_data["edges"][sub["edgeId"]]
+            node = self.map_data["nodes"][str(sub["nodeId"])]
+            edge = self.map_data["edges"][str(sub["edgeId"])]
             self.current_speed = edge["speed"]
             yield from self.move_to_node(node, edge)
 
@@ -374,10 +385,11 @@ class AMR:
                 "missionId": self.current_mission_id,
                 "submissionId": self.current_submission_id,
                 "nodeId": node["id"],
-                "agvId": self.id
+                "amrId": self.id
             }
         }
         ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req_message))
+
 
 
         # 3. 이동
@@ -651,42 +663,54 @@ def setup_amrs(env, map_data):
 
 
 
-# ---------- 상태 전송 ----------
 def broadcast_status():
     while True:
-        with LOCK:
-            if not SHARED_STATUS:
-                time.sleep(0.1)
-                continue
+        try:
+            with LOCK:
+                if not SHARED_STATUS:
+                    time.sleep(0.1)
+                    continue
 
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            for i, (amr_id, status) in enumerate(SHARED_STATUS.items()):
-                message = {
-                    "header": {
-                        "msgName": "AMR_STATE",
-                        "time": now
-                    },
-                    "body": {
-                        "worldX": status["x"],
-                        "worldY": status["y"],
-                        "dir": status["dir"],
-                        "amrId": status["id"],
-                        "state": status["state"],
-                        "battery": status["battery"],
-                        "currentNode": status.get("currentNode", ""),
-                        "currentEdge": status.get("currentEdge", ""),
-                        "loading": True if status["loaded"] else False,
-                        "missionId": status.get("missionId", ""),
-                        "submissionId": status.get("submissionId", ""),
-                        "linearVelocity": status.get("speed", 0),
-                        "missionType": status.get("missionType", 0),
-                        "errorList": ""
+                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                for i, (amr_id, status) in enumerate(SHARED_STATUS.items()):
+                    message = {
+                        "header": {
+                            "msgName": "AMR_STATE",
+                            "time": now
+                        },
+                        "body": {
+                            "worldX": status["x"],
+                            "worldY": status["y"],
+                            "dir": status["dir"],
+                            "amrId": status["id"],
+                            "state": status["state"],
+                            "battery": status["battery"],
+                            "currentNode": status.get("currentNode", ""),
+                            "currentEdge": status.get("currentEdge", ""),
+                            "loading": True if status["loaded"] else False,
+                            "missionId": status.get("missionId", ""),
+                            "submissionId": status.get("submissionId", ""),
+                            "linearVelocity": status.get("speed", 0),
+                            "missionType": status.get("missionType", 0),
+                            "errorList": ""
+                        }
                     }
-                }
-                if i < len(ws_clients):
-                    print(amr_id+": "+str(message))
-                    ws_clients[i].send(json.dumps(message))
-        time.sleep(0.1)
+
+                    if i < len(ws_clients):
+                        try:
+                            print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}")
+                            ws_clients[i].send(json.dumps(message))
+                        except Exception as e:
+                            print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
+                            print(f"❌ [BROADCAST] WebSocket 연결이 종료된 AMR: {amr_id}")
+                            ws_clients[i].close()
+
+            time.sleep(0.1)
+
+        except Exception as global_exception:
+            print(f"❌ [BROADCAST] 스레드가 종료되었습니다: {global_exception}")
+            time.sleep(1)  # 잠시 대기 후 재시작
+
 
 
 
