@@ -1,28 +1,36 @@
 'use client';
 
-import { useGLTF } from '@react-three/drei';
-import { Suspense } from 'react';
-import { LoadingSpinner } from './MapLoading';
+import { useAnimations, useGLTF } from '@react-three/drei';
+import { useEffect, useRef } from 'react';
 
-export const Map3DEnvironment = () => {
-  const { scene } = useGLTF('/FF.glb');
-  // console.log(scene.children[0].children.filter((obj) => obj.name.includes('lane')));
+export const Map3D = () => {
+  const group = useRef(null);
+  const { scene, animations } = useGLTF('/Factory.glb');
+  // console.log(scene.children[0].children.filter((obj) => obj.name.includes('Line'))[0].children);
+  const { actions } = useAnimations(animations, group);
+
+  useEffect(() => {
+    Object.values(actions).forEach((action) => {
+      action?.play();
+    });
+  }, [actions]);
 
   return (
     <>
       {/* 공장 모델 */}
       <primitive
+        ref={group}
         object={scene}
         scale={1}
-        position={[0, 0, 0]}
+        position={[65.5, 8, 9]}
         rotation={[0, 0, 0]}
         // onClick={(e) => {
-        // console.log(e.eventObject);
+        //   console.log(e.eventObject);
         // }}
       />
 
       <axesHelper args={[100]} />
-      <gridHelper args={[100, 100]} />
+      {/* <gridHelper args={[100, 100]} /> */}
 
       {/* 조명 설정 */}
       <ambientLight intensity={0.3} />
@@ -36,13 +44,4 @@ export const Map3DEnvironment = () => {
   );
 };
 
-export const Map3D = () => {
-  return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <Map3DEnvironment />
-    </Suspense>
-  );
-};
-
 useGLTF.preload('/Factory.glb');
-useGLTF.preload('/Line.glb');

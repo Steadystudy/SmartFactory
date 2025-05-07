@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { MapControls, Sphere } from '@react-three/drei';
 import { Suspense } from 'react';
-import { Map3D } from '@/entities/map';
+import { Map3D, MapLoading } from '@/entities/map';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { useModelStore } from '@/shared/model/store';
 import { Model3DRenderer, ModelType } from '@/entities/amrModel';
@@ -52,7 +52,7 @@ const Warehouse = () => {
       <MapControls
         ref={controlsRef}
         enableZoom={true}
-        minDistance={40}
+        minDistance={20}
         maxDistance={80}
         autoRotate={false}
         maxPolarAngle={Math.PI / 4}
@@ -65,12 +65,15 @@ const Warehouse = () => {
 
 const Scene3DViewer = () => {
   return (
-    <Canvas camera={{ position: [40, 40, 40], fov: 60 }}>
+    <>
+      <MapLoading />
       <Suspense fallback={null}>
-        <Map3D />
-        <Warehouse />
+        <Canvas camera={{ position: [40, 40, 40], fov: 60 }}>
+          <Map3D />
+          <Warehouse />
+        </Canvas>
       </Suspense>
-    </Canvas>
+    </>
   );
 };
 
