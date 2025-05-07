@@ -372,6 +372,7 @@ class AMR:
             },
             "body": {
                 "missionId": self.current_mission_id,
+                "submissionId": self.current_submission_id,
                 "nodeId": node["id"],
                 "agvId": self.id
             }

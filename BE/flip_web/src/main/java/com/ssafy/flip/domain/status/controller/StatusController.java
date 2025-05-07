@@ -12,7 +12,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Controller
@@ -52,7 +51,7 @@ public class StatusController {
     @Operation(summary = "line status", description = "라인 상태")
     @GetMapping("/line")
     public ResponseEntity<LineStatusResponseDTO> getLineStatus(){
-        return ResponseEntity.ok(new LineStatusResponseDTO("LINE001", true, LocalDateTime.now()));
+        return ResponseEntity.ok(new LineStatusResponseDTO(1L, 10, true, LocalDateTime.now()));
     }
 
     @Operation(summary = "factory status", description = "공장 현재 상태 확인")
