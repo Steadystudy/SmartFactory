@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 public record AmrMissionResponseDTO(
     String amrId,
     int state,
-    int missionId,
+    String missionId,
     String missionType,
     int submissionId,
     String errorCode,

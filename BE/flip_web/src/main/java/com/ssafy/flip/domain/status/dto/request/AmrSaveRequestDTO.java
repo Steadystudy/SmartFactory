@@ -14,7 +14,7 @@ public record AmrSaveRequestDTO(
         boolean loading,
         float linearVelocity,
         int currentNode,
-        int missionId,
+        String missionId,
         String missionType,
         int submissionId,
         String errorList,

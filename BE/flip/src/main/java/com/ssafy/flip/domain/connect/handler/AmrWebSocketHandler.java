@@ -37,7 +37,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private final Map<Integer, String> nodeOccupants = new ConcurrentHashMap<>();
     private final Map<Integer, Queue<String>> nodeQueues = new ConcurrentHashMap<>();
-    private final Map<String, Integer> lastMissionMap = new ConcurrentHashMap<>();
+    private final Map<String, String> lastMissionMap = new ConcurrentHashMap<>();
     private final Map<String, Integer> previousNodeMap = new ConcurrentHashMap<>();
 
     @Override
@@ -51,6 +51,13 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         if (session.isOpen()) {
             session.sendMessage(new TextMessage(mapInfoJson));
             System.out.println("✅ Map Info 전송 완료: " + mapInfoJson);
+
+            for(int i = 1; i <= 20; i++) {
+                String amrId = String.format("AMR%03d", i);
+                String missionInfoJson = webSocketService.missionAssign(amrId);
+                session.sendMessage(new TextMessage(missionInfoJson));
+            }
+
         } else {
             System.err.println("❌ WebSocket 세션이 닫혀 있음: " + session.getId());
         }
@@ -59,6 +66,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String payload = message.getPayload();
+        System.out.println(payload);
         Map<String, Object> jsonMap = objectMapper.readValue(payload, Map.class);
         Map<String, Object> header = (Map<String, Object>) jsonMap.get("header");
         String msgName = (String) header.get("msgName");
@@ -104,12 +112,14 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             amrSessions.put(amrId, session);
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
 
-            int missionId = amrDto.body().missionId();
+            String missionId = amrDto.body().missionId();
             int currentSubmission = amrDto.body().submissionId();
             int nodeId = amrDto.body().currentNode();
             int edgeId = amrDto.body().currentEdge();
 
-            lastMissionMap.put(amrId, missionId);
+            if(missionId != null) {
+                lastMissionMap.put(amrId, missionId);
+            }
             Integer lastSubmission = lastSubmissionMap.get(amrId);
 
             if (lastSubmission != null && !lastSubmission.equals(currentSubmission)) {
@@ -144,9 +154,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);
             statusService.saveAmr(amrDto, missionRequestDto);
 
-            String missionInfoJson = webSocketService.missionAssign(amrId);
-            session.sendMessage(new TextMessage(missionInfoJson));
-
             Integer currentNode = amrDto.body().currentNode();
             Integer previousNode = previousNodeMap.put(amrId, currentNode);
 
@@ -158,13 +165,14 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                         String nextAmrId = queue.poll();
                         nodeOccupants.put(previousNode, nextAmrId);
                         int nextSubmissionId = lastSubmissionMap.get(nextAmrId);
-                        int nextMissionId = lastMissionMap.get(nextAmrId);
+                        String nextMissionId = lastMissionMap.get(nextAmrId);
                         sendTrafficPermit(nextAmrId, nextMissionId, nextSubmissionId, previousNode);
                     }
                 }
             }
         } catch (Exception e) {
             System.err.println("AMR_STATE 처리 실패: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -173,7 +181,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         String amrId = (String) body.get("amrId");
         int nodeId = (Integer) body.get("nodeId");
         int submissionId = (Integer) body.get("submissionId");
-        int missionId = (Integer) body.get("missionId");
+        String missionId = (String) body.get("missionId");
 
         System.out.println("\uD83D\uDEA6 TRAFFIC_REQ 수신: " + amrId + " → 노드 " + nodeId);
         nodeQueues.computeIfAbsent(nodeId, k -> new LinkedList<>());
@@ -188,7 +196,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void sendTrafficPermit(String amrId, int missionId, int submissionId, int nodeId) {
+    private void sendTrafficPermit(String amrId, String missionId, int submissionId, int nodeId) {
         try {
             Map<String, Object> traffic = new HashMap<>();
             traffic.put("missionId", String.valueOf(missionId));
