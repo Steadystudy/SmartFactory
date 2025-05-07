@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 
 @Builder
 public record RouteTempDTO(
-        int missionId,
+        String missionId,
         int submissionId,
         int nodeId,
         int edgeId,

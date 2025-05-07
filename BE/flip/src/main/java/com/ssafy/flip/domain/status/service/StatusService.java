@@ -7,5 +7,5 @@ public interface StatusService {
 
     void saveAmr(AmrSaveRequestDTO requestDTO,MissionRequestDto missionRequestDTO);
 
-    MissionRequestDto Algorithim(int missionId);
+    MissionRequestDto Algorithim(String missionId);
 }

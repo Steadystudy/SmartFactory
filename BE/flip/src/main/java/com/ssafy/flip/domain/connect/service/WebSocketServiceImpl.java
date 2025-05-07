@@ -58,23 +58,23 @@ public class WebSocketServiceImpl implements WebSocketService {
                       "amrId": "%s"
                    },
                    "body": {
-                      "missionId":"1",
+                      "missionId":"mission001",
                       "missionType":"moving",
                       "submissions":[
                          {
-                            "submissionId":"1",
-                            "nodeId":"1",
-                            "edgeId":"10"
+                            "submissionId":1,
+                            "nodeId":1,
+                            "edgeId":10
                          },
                          {
-                            "submissionId":"2",
-                            "nodeId":"2",
-                            "edgeId":"1"
+                            "submissionId":2,
+                            "nodeId":2,
+                            "edgeId":1
                          },
                          {
-                            "submissionId":"3",
-                            "nodeId":"9",
-                            "edgeId":"18"
+                            "submissionId":3,
+                            "nodeId":9,
+                            "edgeId":18
                          }
                       ]
                    }

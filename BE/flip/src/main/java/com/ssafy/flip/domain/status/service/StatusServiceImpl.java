@@ -111,7 +111,7 @@ public class StatusServiceImpl implements StatusService{
 
 
     @Override
-    public MissionRequestDto Algorithim(int missionId) {
+    public MissionRequestDto Algorithim(String missionId) {
         String dummyJson = """
 {
    "header": {

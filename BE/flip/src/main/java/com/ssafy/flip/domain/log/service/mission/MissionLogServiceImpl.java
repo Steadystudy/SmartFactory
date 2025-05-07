@@ -57,7 +57,7 @@ public class MissionLogServiceImpl implements MissionLogService {
     }
 
     @Override
-    public MissionLog saveWithRoutes(String amrId, int missionId, List<RouteTempDTO> routes) {
+    public MissionLog saveWithRoutes(String amrId, String missionId, List<RouteTempDTO> routes) {
         MissionLog log = missionLogRepository.save(
                 MissionLog.builder()
                         .mission(missionService.getMission(String.valueOf(missionId)))
