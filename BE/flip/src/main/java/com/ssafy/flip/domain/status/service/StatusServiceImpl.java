@@ -103,10 +103,7 @@ public class StatusServiceImpl implements StatusService{
                 .submissionList(submissionList)
                 .routeList(List.of(
                         "{ \"submissionId\": 1, \"submissionNode\": 10, \"submissionX\": 2.5, \"submissionY\": 3.7 }"
-
                 ))
-
-
                 .build();
 
         amrStatusRedisRepository.save(amrStatusRedis);
