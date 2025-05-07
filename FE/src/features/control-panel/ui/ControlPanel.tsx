@@ -124,7 +124,7 @@ export const ControlPanel = () => {
   }, [missionFilter, amrFilter, stateFilter]);
 
   return (
-    <div className='flex min-w-[300px] grow p-4 bg-[#0B1120]'>
+    <div className='flex min-w-[320px] w-1/4 grow p-4 bg-[#0B1120]'>
       <div className='w-full'>
         <div className='flex gap-2 mb-4'>
           <Select onValueChange={setMissionFilter} defaultValue={FILTER_ALL}>
