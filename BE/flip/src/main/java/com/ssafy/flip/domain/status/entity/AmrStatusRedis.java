@@ -28,7 +28,7 @@ public class AmrStatusRedis {
     private float linearVelocity;
 
     private int currentNode;
-    private int missionId;
+    private String missionId;
     private String missionType;
     private int submissionId;
 
