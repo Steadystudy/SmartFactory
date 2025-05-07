@@ -1,23 +1,21 @@
 package com.ssafy.flip.domain.status.service;
 
-import com.ssafy.flip.domain.status.dto.request.AmrMissionRequestDTO;
-import com.ssafy.flip.domain.status.dto.response.AmrMissionResponseDTO;
-import com.ssafy.flip.domain.status.dto.response.AmrRealTimeDTO;
-import com.ssafy.flip.domain.status.dto.response.AmrRealTimeResponseDTO;
+import com.ssafy.flip.domain.line.service.LineService;
+import com.ssafy.flip.domain.status.dto.request.*;
+import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -25,14 +23,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisRepository amrStatusRedisRepository;
-
-//    @PostConstruct
-//    public void startRealTimeBroadcast() {
-//        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
-//                this::broadcastRealTimeStatus,
-//                0, 1, TimeUnit.SECONDS
-//        );
-//    }
+    private final LineService lineService;
 
     @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
@@ -47,9 +38,31 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
         messagingTemplate.convertAndSend("/amr/real-time", response);
     }
 
+    @EventListener
+    public void handleSubscribeEvent(SessionSubscribeEvent event) {
+        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        String destination = headerAccessor.getDestination();
+
+        if (Objects.equals(destination, "/amr/mission")) {
+            pushMissionStatus(null);
+        }
+    }
+
     @Override
     public void pushMissionStatus(AmrMissionRequestDTO requestDTO) {
-        Iterable<AmrStatusRedis> amrStatusIterable = amrStatusRedisRepository.findAll();
-        messagingTemplate.convertAndSend("/amr/mission", amrStatusIterable);
+        List<AmrMissionResponseDTO> amrMissionResponseDTOS = amrStatusRedisRepository.findAll()
+                .stream()
+                .map(AmrMissionResponseDTO::from)
+                .toList();
+        messagingTemplate.convertAndSend("/amr/mission", amrMissionResponseDTOS);
+    }
+
+    @Override
+    @Scheduled(fixedRate = 1000)
+    public void pushLineStatus() {
+        List<LineStatusResponseDTO> lineStatusResponseDTOSs = lineService.findAll().stream()
+            .map(LineStatusResponseDTO::from)
+            .toList();
+        messagingTemplate.convertAndSend("/amr/line", lineStatusResponseDTOSs);
     }
 }
