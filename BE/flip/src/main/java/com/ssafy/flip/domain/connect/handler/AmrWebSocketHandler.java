@@ -1,5 +1,6 @@
 package com.ssafy.flip.domain.connect.handler;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.connect.dto.request.RouteTempDTO;
 import com.ssafy.flip.domain.connect.service.WebSocketService;
@@ -16,8 +17,10 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -39,6 +42,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final Map<Integer, Queue<String>> nodeQueues = new ConcurrentHashMap<>();
     private final Map<String, String> lastMissionMap = new ConcurrentHashMap<>();
     private final Map<String, Integer> previousNodeMap = new ConcurrentHashMap<>();
+
+    private static final DateTimeFormatter fmt =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -152,7 +158,25 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             }
 
             MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);
-            statusService.saveAmr(amrDto, missionRequestDto);
+
+            List<RouteTempDTO> temps = routeTempMap.getOrDefault(amrId, Collections.emptyList());
+            List<String> routeListJson = temps.stream()
+                    .map(dto -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("routeId",   dto.getSubmissionId());
+                        m.put("routeNode", dto.getNodeId());
+                        m.put("startAt",   dto.getStartedAt().format(fmt));
+                        try {
+                            return objectMapper.writeValueAsString(m);
+                        } catch (JsonProcessingException e) {
+                            throw new RuntimeException("Route JSON 직렬화 실패", e);
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+
+
+            statusService.saveAmr(amrDto, missionRequestDto, routeListJson); 
 
             Integer currentNode = amrDto.body().currentNode();
             Integer previousNode = previousNodeMap.put(amrId, currentNode);

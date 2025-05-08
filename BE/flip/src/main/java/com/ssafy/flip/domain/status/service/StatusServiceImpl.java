@@ -42,7 +42,7 @@ public class StatusServiceImpl implements StatusService{
 
     @Override
     @Transactional
-    public void saveAmr(AmrSaveRequestDTO amrSaveRequestDTO, MissionRequestDto missionRequestDTO) {
+    public void saveAmr(AmrSaveRequestDTO amrSaveRequestDTO, MissionRequestDto missionRequestDTO, List<String> routeList) {
         String type = amrJpaRepository.findById(amrSaveRequestDTO.body().amrId())
                 .map(AMR::getType)
                 .orElseThrow(() -> new IllegalArgumentException("해당 AMR 없음"));
@@ -101,7 +101,7 @@ public class StatusServiceImpl implements StatusService{
                 .targetY(targetNodeDto.getY())
                 .expectedArrival(missionRequestDTO.body().expectedArrival())
                 .submissionList(submissionList)
-                .routeList(null)
+                .routeList(routeList)
                 .build();
 
         amrStatusRedisRepository.save(amrStatusRedis);
