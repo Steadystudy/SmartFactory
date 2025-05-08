@@ -24,7 +24,7 @@ public class StatusController {
         MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);  // 더미 호출
 
 
-        statusService.saveAmr(amrSaveRequestDTO,missionRequestDto);
+        statusService.saveAmr(amrSaveRequestDTO,missionRequestDto, null);
         return ResponseEntity.ok(null);
         //return ResponseEntity.ok(new AmrMissionResponseDTO("AMR001", 0, 1, "MOVING", 2, "ERROR01", LocalDateTime.now(), "TYPE001", (float) 3.14, (float) 3.14, (float) 71.5, (float) 65.5, 620));
     }
