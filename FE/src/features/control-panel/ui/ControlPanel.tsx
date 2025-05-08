@@ -8,103 +8,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MissionCard } from './MissionCard';
-import { AMRState } from '@/entities/amrModel';
 import { AMR_CARD_STATUS } from '../model';
-import { useState, useMemo } from 'react';
-
-// 임시 데이터
-const mockData: AMR_CARD_STATUS[] = [
-  {
-    amrId: 'AMR001',
-    state: AMRState.PROCESSING,
-    missionId: 1,
-    missionType: 'MOVING',
-    submissionId: 1,
-    errorCode: '',
-    timestamp: new Date().toISOString(),
-    type: 'TYPE001',
-    startX: 10.5,
-    startY: 15.3,
-    targetX: 20.1,
-    targetY: 25.7,
-    expectedArrival: 600, // 10분
-  },
-  {
-    amrId: 'AMR002',
-    state: AMRState.CHARGING,
-    missionId: 2,
-    missionType: 'CHARGING',
-    submissionId: 2,
-    errorCode: '',
-    timestamp: new Date().toISOString(),
-    type: 'TYPE001',
-    startX: 5.2,
-    startY: 8.7,
-    targetX: 15.4,
-    targetY: 18.9,
-    expectedArrival: 300, // 5분
-  },
-  {
-    amrId: 'AMR003',
-    state: AMRState.ERROR,
-    missionId: 3,
-    missionType: 'LOADING',
-    submissionId: 3,
-    errorCode: 'ERROR01',
-    timestamp: new Date().toISOString(),
-    type: 'TYPE002',
-    startX: 30.1,
-    startY: 40.5,
-    targetX: 45.8,
-    targetY: 55.2,
-    expectedArrival: 900, // 15분
-  },
-  // {
-  //   amrId: 'AMR004',
-  //   state: AMRState.PROCESSING,
-  //   missionId: 3,
-  //   missionType: 'MOVING',
-  //   submissionId: 4,
-  //   errorCode: 'ERROR01',
-  //   timestamp: new Date().toISOString(),
-  //   type: 'TYPE002',
-  //   startX: 2.1,
-  //   startY: 7.5,
-  //   targetX: 40.8,
-  //   targetY: 75.2,
-  //   expectedArrival: 900, // 15분
-  // },
-  // {
-  //   amrId: 'AMR005',
-  //   state: AMRState.PROCESSING,
-  //   missionId: 3,
-  //   missionType: 'MOVING',
-  //   submissionId: 5,
-  //   errorCode: 'ERROR01',
-  //   timestamp: new Date().toISOString(),
-  //   type: 'TYPE003',
-  //   startX: 31.1,
-  //   startY: 40.5,
-  //   targetX: 75.8,
-  //   targetY: 55.2,
-  //   expectedArrival: 900, // 15분
-  // },
-  // {
-  //   amrId: 'AMR006',
-  //   state: AMRState.IDLE,
-  //   missionId: 3,
-  //   missionType: 'LOADING',
-  //   submissionId: 6,
-  //   errorCode: 'ERROR01',
-  //   timestamp: new Date().toISOString(),
-  //   type: 'TYPE003',
-  //   startX: 39.1,
-  //   startY: 48.5,
-  //   targetX: 48.8,
-  //   targetY: 5.2,
-  //   expectedArrival: 900, // 15분
-  // },
-];
+import { useState, useMemo, useEffect } from 'react';
+import { useAmrSocketStore } from '@/shared/store/amrSocket';
 
 const FILTER_ALL = 'ALL';
 
@@ -112,16 +18,28 @@ export const ControlPanel = () => {
   const [missionFilter, setMissionFilter] = useState<string>(FILTER_ALL);
   const [amrFilter, setAmrFilter] = useState<string>(FILTER_ALL);
   const [stateFilter, setStateFilter] = useState<string>(FILTER_ALL);
+  const { amrSocket, isConnected } = useAmrSocketStore();
+  const [data, setData] = useState<AMR_CARD_STATUS[]>([]);
 
   const filteredData = useMemo(() => {
-    return mockData.filter((amr) => {
+    return data.filter((amr) => {
       const missionMatch = missionFilter === FILTER_ALL || amr.missionType === missionFilter;
-      const amrMatch = amrFilter === FILTER_ALL || amr.amrId === amrFilter;
+      const amrMatch = amrFilter === FILTER_ALL || amr.type === amrFilter;
       const stateMatch = stateFilter === FILTER_ALL || amr.state === Number(stateFilter);
 
       return missionMatch && amrMatch && stateMatch;
     });
-  }, [missionFilter, amrFilter, stateFilter]);
+  }, [missionFilter, amrFilter, stateFilter, data]);
+
+  useEffect(() => {
+    if (!isConnected || !amrSocket) return;
+
+    amrSocket.subscribe('/amr/mission', (message) => {
+      const data = JSON.parse(message.body);
+      console.log('미션', data);
+      setData(data);
+    });
+  }, [amrSocket, isConnected]);
 
   return (
     <div className='flex min-w-[320px] w-1/4 grow p-4 bg-[#0B1120]'>
@@ -146,9 +64,9 @@ export const ControlPanel = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={FILTER_ALL}>전체 AMR</SelectItem>
-              {mockData.map((amr) => (
-                <SelectItem key={amr.amrId} value={amr.amrId}>
-                  {amr.amrId}
+              {['Type-A', 'Type-B', 'Type-C'].map((amr) => (
+                <SelectItem key={amr} value={amr}>
+                  {amr}
                 </SelectItem>
               ))}
             </SelectContent>

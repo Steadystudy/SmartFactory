@@ -5,35 +5,17 @@ import { MapControls, Sphere } from '@react-three/drei';
 import { Suspense } from 'react';
 import { Map3D, MapLoading } from '@/entities/map';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
-import { useModelStore } from '@/shared/model/store';
-import { Model3DRenderer, ModelType } from '@/entities/amrModel';
+import { Model3DRenderer } from '@/entities/amrModel';
 import { useCameraFollow } from '../lib';
 
-// index에 따라 ModelType 반환하는 함수
-const getModelTypeByIndex = (index: number): ModelType => {
-  switch (index % 3) {
-    case 0:
-      return 'amr';
-    case 1:
-      return 'ssf250';
-    case 2:
-      return 'ssf1200';
-    default:
-      return 'amr';
-  }
-};
-
 const Warehouse = () => {
-  const { models } = useModelStore();
   const { selectedAmrId, startX, startY, targetX, targetY } = useSelectedAMRStore();
   const { controlsRef } = useCameraFollow({ is2D: false });
 
   return (
     <>
       {/* 모델 렌더링 */}
-      {models?.map((amrInfo, index) => (
-        <Model3DRenderer type={getModelTypeByIndex(index)} key={amrInfo.amrId} amrInfo={amrInfo} />
-      ))}
+      <Model3DRenderer />
 
       {/* 출발지 표시 (파란색 구체) */}
       {selectedAmrId && (
