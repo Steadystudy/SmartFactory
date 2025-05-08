@@ -168,7 +168,11 @@ public class StatusServiceImpl implements StatusService{
             }
         }
 
-        amrWorkTime /= amrMaxNum;
+        if(amrMaxNum != 0) {
+            amrWorkTime /= amrMaxNum;
+        } else {
+            amrWorkTime = 0;
+        }
 
         //DB
         List<Line> lines = lineService.findAll();
