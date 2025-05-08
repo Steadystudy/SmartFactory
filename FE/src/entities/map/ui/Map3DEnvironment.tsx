@@ -33,10 +33,10 @@ export const Map3D = () => {
       {/* <gridHelper args={[100, 100]} /> */}
 
       {/* 조명 설정 */}
-      <ambientLight intensity={0.3} />
+      <ambientLight intensity={1.5} />
       <directionalLight
         position={[5, 8, 5]}
-        intensity={1.2}
+        intensity={1.5}
         castShadow
         shadow-mapSize={[1024, 1024]}
       />
