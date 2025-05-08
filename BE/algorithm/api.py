@@ -7,7 +7,7 @@ import numpy as np
 
 def mapInit():
     # 2. 맵데이터 읽기 (노드 정보)
-    with open('algorithm/맵데이터.txt', 'r', encoding='utf-8') as file:
+    with open('맵데이터.txt', 'r', encoding='utf-8') as file:
         buffer = ''
         for line in file:
             buffer += line.strip()
@@ -17,7 +17,7 @@ def mapInit():
                 buffer = ''
 
     # 3. 엣지데이터 읽기 (엣지 정보)
-    with open('algorithm/edge.txt', 'r', encoding='utf-8') as file:
+    with open('edge.txt', 'r', encoding='utf-8') as file:
         buffer = ''
         for line in file:
             buffer += line.strip()
