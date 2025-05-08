@@ -2,6 +2,7 @@ package com.ssafy.flip.domain.connect.controller;
 
 import com.ssafy.flip.domain.connect.service.ConnectService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -17,6 +18,7 @@ import java.util.Set;
 public class ConnectController {
 
     private final ConnectService connectService;
+    private final StringRedisTemplate redisTemplate;
 
     // 연결된 AMR 목록 조회
     @GetMapping("/")
@@ -52,5 +54,11 @@ public class ConnectController {
         } catch (IOException | IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("전송 실패: " + e.getMessage());
         }
+    }
+
+    @PostMapping("/algorithm/test")
+    public ResponseEntity<String> triggerAlgorithm() {
+        redisTemplate.convertAndSend("algorithm-trigger", "RUN");
+        return ResponseEntity.ok("📡 Algorithm trigger sent.");
     }
 }

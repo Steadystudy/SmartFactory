@@ -14,8 +14,11 @@ import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import com.ssafy.flip.domain.storage.entity.Storage;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -39,6 +42,8 @@ public class StatusServiceImpl implements StatusService{
 
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private final AmrJpaRepository amrJpaRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
+
 
     @Override
     @Transactional
@@ -107,6 +112,37 @@ public class StatusServiceImpl implements StatusService{
         amrStatusRedisRepository.save(amrStatusRedis);
     }
 
+    @Override
+    public void processAMRSTATUS(AmrSaveRequestDTO amrDto) {
+
+
+        /* --- 3. DTO → Redis Hash 로 직렬화 없이 삽입 (Lettuce 파이프라인) --- */
+        redisTemplate.executePipelined((RedisConnection connection) -> {
+            String key = "AMR_STATUS:" + amrDto.body().amrId();
+            Map<byte[], byte[]> map = new LinkedHashMap<>();
+
+            map.put(b("x"), b(String.valueOf(amrDto.body().worldX())));
+            map.put(b("y"), b(String.valueOf(amrDto.body().worldY())));
+            map.put(b("dir"), b(String.valueOf(amrDto.body().dir())));
+            map.put(b("state"), b(String.valueOf(amrDto.body().state())));
+            map.put(b("battery"), b(String.valueOf(amrDto.body().battery())));
+            map.put(b("loading"), b(String.valueOf(amrDto.body().loading())));
+            map.put(b("linearVelocity"), b(String.valueOf(amrDto.body().linearVelocity())));
+            map.put(b("currentNode"), b(String.valueOf(amrDto.body().currentNode())));
+            map.put(b("missionId"), b(String.valueOf(amrDto.body().missionId())));
+            map.put(b("missionType"), b(
+                    amrDto.body().missionType() != null ? amrDto.body().missionType() : "UNKNOWN"
+            ));
+
+            map.put(b("errorList"), b(String.valueOf(amrDto.body().errorList())));
+            map.put(b("submissionId"), b(String.valueOf(amrDto.body().submissionId())));
+
+            // ✅ 최신 방식: hashCommands() 사용
+            connection.hashCommands().hMSet(b(key), map);
+            return null;
+        });
+    }
+    private static byte[] b(String s) { return s.getBytes(StandardCharsets.UTF_8); }
 
     @Override
     public MissionRequestDto Algorithim(String missionId) {
