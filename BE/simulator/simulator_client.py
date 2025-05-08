@@ -263,6 +263,8 @@ def start_simulation():
     threading.Thread(target=broadcast_status, daemon=True).start()
     threading.Thread(target=lambda: env.run(), daemon=True).start()
     threading.Thread(target=deadlock_monitor, daemon=True).start()
+    #1초휴식
+    time.sleep(1)
 
 # ---------- AMR 클래스 ----------
 class AMR:
@@ -722,13 +724,14 @@ def broadcast_status():
 
                     if i < len(ws_clients):
                         try:
-                            print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}")
+                            print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
                             ws_clients[i].send(json.dumps(message))
                         except Exception as e:
                             print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
                             print(f"❌ [BROADCAST] WebSocket 연결이 종료된 AMR: {amr_id}")
                             ws_clients[i].close()
 
+            #time.sleep(1000)
             time.sleep(0.1)
 
         except Exception as global_exception:

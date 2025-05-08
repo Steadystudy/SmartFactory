@@ -6,9 +6,8 @@ import random
 import numpy as np
 
 def mapInit():
-
     # 2. 맵데이터 읽기 (노드 정보)
-    with open('맵데이터.txt', 'r', encoding='utf-8') as file:
+    with open('algorithm/맵데이터.txt', 'r', encoding='utf-8') as file:
         buffer = ''
         for line in file:
             buffer += line.strip()
@@ -18,7 +17,7 @@ def mapInit():
                 buffer = ''
 
     # 3. 엣지데이터 읽기 (엣지 정보)
-    with open('edge.txt', 'r', encoding='utf-8') as file:
+    with open('algorithm/edge.txt', 'r', encoding='utf-8') as file:
         buffer = ''
         for line in file:
             buffer += line.strip()
@@ -56,6 +55,8 @@ def mapInit():
             raise ValueError(f"Unknown direction: {direction}")
 
 def aStar(start, end):
+    if end>=1000:
+        return None , 0
     open_set = []  # (f_score, node) 저장하는 heap
     heapq.heappush(open_set, (0, start))
 
@@ -92,70 +93,130 @@ def heuristic(node1, node2):
     x2, y2 = nodes[node2]['x'], nodes[node2]['y']
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
+# ---------- 작업별 적재(1) / 비적재(0) 요구 ----------
+def needs_load(task_id: int) -> bool:
+    return 11 <= task_id <= 20 or 31 <= task_id <= 40          # 적재 必
 
+def needs_unload(task_id: int) -> bool:
+    return 21 <= task_id <= 30 or 41 <= task_id <= 50          # 비적재 必
+
+
+# ---------- 로봇‑작업 1쌍에 대한 비용·경로 계산 ----------
+PICKUP_NODES = (101, 124, 114)          # 적재 지점 3곳
+EXTRA_PICKUP_COST = 6                   # 적재 소요 시간(코스트)
+
+def calc_cost_and_route(start_node: int,
+                        loaded: int,
+                        task_dest: int) -> tuple[list[int] | None, float]:
+    """start_node: 현재 로봇 위치, loaded: 0/1, task_dest: 목적지 노드"""
+    # 더미 작업(1000 이상)은 0 코스트
+    if task_dest >= 1000:
+        return [start_node], 0.0
+
+    # ① 상태가 이미 만족되는 경우 → 그냥 A*
+    if (loaded == 1 and needs_load(task_dest)) or \
+       (loaded == 0 and needs_unload(task_dest)) or \
+       (not needs_load(task_dest) and not needs_unload(task_dest)):
+        return aStar(start_node, task_dest)
+
+    # ② (0 → 1) 적재가 필요한데 현재 비적재인 경우
+    if loaded == 0 and needs_load(task_dest):
+        best_cost = float("inf")
+        best_route = None
+        for p in PICKUP_NODES:
+            r1, c1 = aStar(start_node, p)
+            r2, c2 = aStar(p, task_dest)
+            if not r1 or not r2:
+                continue
+            total = c1 + c2 + EXTRA_PICKUP_COST
+            if total < best_cost:
+                best_cost = total
+                best_route = r1[:-1] + r2       # 중복 노드(픽업 지점) 제거
+        return best_route, best_cost
+
+    # ③ (1 → 0) 비적재 작업인데 현재 적재인 경우 → 할 수 없음(∞ 비용)
+    return None, 999
+
+
+# ---------- 헝가리안 알고리즘 ----------
 def hungarian(robotList, taskList):
-    n = len(robotList)
-    m = len(taskList)
-    
-    if n > m:
-        dummy_cnt = n - m
-        for i in range(dummy_cnt):
-            taskList.append((f"DUMMY_{i+1}", 0))  # dummy 작업 ID, 점수 0
-        print(f"⚠️ 작업이 부족하여 dummy 작업 {dummy_cnt}개를 추가했습니다.")
-    
-    taskList = taskList[:n]  # 길이 일치
-    print("📝 taskList (작업 ID, 점수):", taskList)
+    n, m = len(robotList), len(taskList)
+    if n > m:                                # 더미 작업 보충
+        for k in range(n - m):
+            taskList.append((1000 + k, 0))
+    taskList = taskList[:n]
 
-    # 1. 비용 행렬 생성 (aStar 기반)
     cost_matrix = np.zeros((n, n))
-    routes = [[None]*n for _ in range(n)]  # 경로 저장용
+    routes = [[None]*n for _ in range(n)]
 
     for i in range(n):
+        _,start_node, loaded = robotList[i]     # 위치, 적재 여부
         for j in range(n):
-            route, cost = aStar(robotList[i], taskList[j][0])  # taskList[j][0]: 작업 ID
-            cost_matrix[i][j] = cost
-            routes[i][j] = route
+            dest, _ = taskList[j]
+            r, c = calc_cost_and_route(start_node, loaded, dest)
+            routes[i][j] = r
+            cost_matrix[i][j] = c
 
-    # 2. 헝가리안 알고리즘 수행
+    # 헝가리안 수행 (불가능 매칭은 ∞ 비용으로 자동 제외)
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
-    # 3. 결과 매칭, 거리 및 경로 포함 출력
-    total_cost = 0
-    print("\n🔗 매칭 결과:")
+    # 결과 출력 (∞ 비용은 매칭에서 빠짐)
+    total = 0
+    print("\n🔗 매칭 결과")
     for i, j in zip(row_ind, col_ind):
-        robot_id = robotList[i]
-        task_id, score = taskList[j]
-        path = routes[i][j]
+        robot_name,robot_id, loaded = robotList[i]
+        dest, score = taskList[j]
         cost = cost_matrix[i][j]
-        total_cost += cost
-
-        print(f"🦾 로봇 {robot_id} → 작업 {task_id} (점수: {score})")
+        path = routes[i][j]
+        if math.isinf(cost):
+            print(f"❌ 로봇 {robot_id} → 작업 {dest} (불가능)")
+            continue
+        total += cost
+        state = "적재" if loaded else "비적재"
+        print(f"🦾 로봇{robot_name} 노드:{robot_id}({state}) → 작업 {dest} | 거리 {cost:.2f}")
         print(f"   📍 경로: {path}")
-        print(f"   📏 거리: {cost:.2f}\n")
 
-    print(f"✅ 총 거리 비용: {total_cost:.2f}")
+    print(f"\n✅ 총 거리 비용: {total:.2f}")
+    return [(robotList[i], taskList[j], routes[i][j], cost_matrix[i][j])
+            for i, j in zip(row_ind, col_ind)], total
 
-    # 선택적으로 assignments도 리턴 가능
-    assignments = [(robotList[i], taskList[j], routes[i][j], cost_matrix[i][j]) for i, j in zip(row_ind, col_ind)]
-    return assignments, total_cost
+# --- 맨 아래의 “demo 코드” 삭제 -----------------------------
+# robot = 20
+# ...
+# result = hungarian(robotList, taskList)
+# -----------------------------------------------------------
+
+# 대신 함수로 노출
+def assign_tasks(robot_list: list[tuple[str, int, int]],
+                 line_status: list[tuple[int, float]]):
+    """
+    robot_list  = [(amrId, currentNode, loading(0/1)), ...]
+    line_status = [(nodeId, score), ...]   # 점수 = 남은 작업 ‘긴급도’ 등
+    """
+    # score 기준 내림차순 정렬
+    task_list = sorted(line_status, key=lambda x: x[1], reverse=True)
+
+    assignments, _ = hungarian(robot_list, task_list)
+    return assignments            # [(robotTuple, taskTuple, path, cost), ...]
+
 
 nodes = {}
 edges = []
 graph = {}
 
-#맵 생성
-mapInit()
-#astar알고리즘(현재 가고있는 노드,시작노드,끝점)
-#print(aStar(11,51))
-#현재 가동 가능한 로봇수
-robot=20
-excluded_ids = {204, 205, 212, 213, 220, 221, 228, 229}
-robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
-robotList = random.sample(robot_candidates, k=20)
-lineStatus = random.sample(range(1, 61), 40)
-print(lineStatus)
-taskList = [(idx+11,val) for idx,val in enumerate(lineStatus) if val >= 28]
-taskList.sort(key=lambda x: x[1], reverse=True)
-#로봇의 현재 노드 위치[20개], 일의의
-result=hungarian(robotList,taskList)
-#로봇리스트([1,2,5,47,8,7,8,9,1,0,1,2,5,5].[max:40개고(,마지막 호출시간)])
+# # #맵 생성
+# mapInit()
+# #astar알고리즘(현재 가고있는 노드,시작노드,끝점)
+# print(aStar(11,51))
+# #현재 가동 가능한 로봇수
+# robot=20
+# excluded_ids = {204, 205, 212, 213, 220, 221, 228, 229}
+# robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
+# #(현재 위치 , 0은 적재안함 1은 적재상태 , 
+# robotList = [(robotName,rid, random.randint(0, 1)) for robotName,rid in enumerate(random.sample(robot_candidates, k=robot))]
+# lineStatus = random.sample(range(1, 61), 40)
+# print(lineStatus)
+# taskList = [(idx+11,val) for idx,val in enumerate(lineStatus) if val >= 28]
+# taskList.sort(key=lambda x: x[1], reverse=True)
+# #로봇의 현재 노드 위치[20개], 일의의
+# result=hungarian(robotList,taskList)
