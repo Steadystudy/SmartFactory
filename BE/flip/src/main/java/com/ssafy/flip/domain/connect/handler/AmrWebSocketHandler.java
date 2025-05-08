@@ -66,13 +66,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         if (session.isOpen()) {
             session.sendMessage(new TextMessage(mapInfoJson));
             System.out.println("✅ Map Info 전송 완료: " + mapInfoJson);
-
-            for(int i = 1; i <= 20; i++) {
-                String sendAmrId = String.format("AMR%03d", i);
-                String missionInfoJson = webSocketService.missionAssign(sendAmrId);
-                session.sendMessage(new TextMessage(missionInfoJson));
-            }
-
         } else {
             System.err.println("❌ WebSocket 세션이 닫혀 있음: " + session.getId());
         }
