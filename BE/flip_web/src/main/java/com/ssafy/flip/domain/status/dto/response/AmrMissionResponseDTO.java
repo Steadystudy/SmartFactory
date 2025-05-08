@@ -18,6 +18,7 @@ public record AmrMissionResponseDTO(
     float targetX,
     float targetY,
     int expectedArrival,
+    int battery,
     LocalDateTime startedAt
 ) {
     public static AmrMissionResponseDTO from(AmrStatusRedis amrStatusRedis) {
@@ -35,6 +36,7 @@ public record AmrMissionResponseDTO(
                 amrStatusRedis.getTargetX(),
                 amrStatusRedis.getTargetY(),
                 amrStatusRedis.getExpectedArrival(),
+                amrStatusRedis.getBattery(),
                 LocalDateTime.now()
         );
     }
