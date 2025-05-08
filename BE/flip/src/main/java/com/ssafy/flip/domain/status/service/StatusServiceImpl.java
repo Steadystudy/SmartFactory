@@ -101,9 +101,7 @@ public class StatusServiceImpl implements StatusService{
                 .targetY(targetNodeDto.getY())
                 .expectedArrival(missionRequestDTO.body().expectedArrival())
                 .submissionList(submissionList)
-                .routeList(List.of(
-                        "{ \"submissionId\": 1, \"submissionNode\": 10, \"submissionX\": 2.5, \"submissionY\": 3.7 }"
-                ))
+                .routeList(List.of())
                 .build();
 
         amrStatusRedisRepository.save(amrStatusRedis);
