@@ -16,6 +16,7 @@ public class AmrRealTimeDTO {
     boolean loading;
     int linearVelocity;
     String errorCode;
+    String type;
 
     public static AmrRealTimeDTO from(AmrStatusRedis amrStatusRedis) {
         return new AmrRealTimeDTO(
@@ -27,7 +28,8 @@ public class AmrRealTimeDTO {
                 amrStatusRedis.getCurrentNode(),
                 amrStatusRedis.isLoading(),
                 Math.round(amrStatusRedis.getLinearVelocity()), // float -> int로 변환
-                amrStatusRedis.getErrorList()
+                amrStatusRedis.getErrorList(),
+                amrStatusRedis.getType()
         );
     }
 }
