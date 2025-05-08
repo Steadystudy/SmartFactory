@@ -3,6 +3,7 @@ package com.ssafy.flip.domain.connect.handler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.connect.dto.request.RouteTempDTO;
+import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
 import com.ssafy.flip.domain.connect.service.WebSocketService;
 import com.ssafy.flip.domain.log.service.mission.MissionLogService;
 import com.ssafy.flip.domain.status.dto.request.AmrSaveRequestDTO;
@@ -10,6 +11,7 @@ import com.ssafy.flip.domain.status.dto.request.MissionRequestDto;
 import com.ssafy.flip.domain.status.service.StatusService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     @Getter
@@ -33,6 +36,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final WebSocketService webSocketService;
     private final StatusService statusService;
     private final MissionLogService missionLogService;
+    private final AlgorithmTriggerProducer trigger;   // ← Kafka로 트리거
 
     private final Map<String, Integer> lastSubmissionMap = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> submissionStartMap = new ConcurrentHashMap<>();
@@ -49,9 +53,14 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         System.out.println("AMR 연결 : " + session.getId());
-
         // WebSocketServiceImpl에서 JSON 데이터 가져옴
         String mapInfoJson = webSocketService.sendMapInfo();
+        session.sendMessage(new TextMessage(mapInfoJson));
+        String amrId = extractAmrId(session); // 또는 session.getUri()에서 추출
+        log.info("✅ WebSocket 세션 등록됨: {}", amrId);
+        webSocketService.registerSession(amrId, session);
+
+
 
         // 직접 WebSocket 세션에 메시지 전송
         if (session.isOpen()) {
@@ -59,14 +68,18 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             System.out.println("✅ Map Info 전송 완료: " + mapInfoJson);
 
             for(int i = 1; i <= 20; i++) {
-                String amrId = String.format("AMR%03d", i);
-                String missionInfoJson = webSocketService.missionAssign(amrId);
+                String sendAmrId = String.format("AMR%03d", i);
+                String missionInfoJson = webSocketService.missionAssign(sendAmrId);
                 session.sendMessage(new TextMessage(missionInfoJson));
             }
 
         } else {
             System.err.println("❌ WebSocket 세션이 닫혀 있음: " + session.getId());
         }
+    }
+    private String extractAmrId(WebSocketSession session) {
+        String uri = session.getUri().toString();
+        return uri.substring(uri.indexOf("=") + 1);
     }
 
     @Override
@@ -83,6 +96,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 break;
             case "TRAFFIC_REQ":
                 handleTrafficRequest(jsonMap);
+                break;
+            case "SIMULATION_START":
+                handleStimulatorStart();
                 break;
             default:
                 System.out.println("Unknown message: " + msgName);
@@ -111,13 +127,25 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    private void handleStimulatorStart(){
+        String kafkaPayload = "Simulator Start";
+        try {
+            Thread.sleep(1000); // 1초 대기
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // 인터럽트 플래그 복구
+            e.printStackTrace();
+        }
+        trigger.run(kafkaPayload);  // Kafka: algorithm-trigger, 메시지는 전체 AMR 상태
+    }
+
     private void handleAmrState(Map<String, Object> json, WebSocketSession session) {
         try {
             Map<String, Object> body = (Map<String, Object>) json.get("body");
             String amrId = (String) body.get("amrId");
             amrSessions.put(amrId, session);
-            AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
 
+            AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
+            statusService.processAMRSTATUS(amrDto);
             String missionId = amrDto.body().missionId();
             int currentSubmission = amrDto.body().submissionId();
             int nodeId = amrDto.body().currentNode();
@@ -154,6 +182,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     routeTempMap.remove(amrId);
                     submissionStartMap.remove(amrId);
                     lastSubmissionMap.remove(amrId);
+                    /// 내가 추가해줘야하는곳 ( 미션이 끝나는곳)
+                    String kafkaPayload = objectMapper.writeValueAsString(amrDto);
+                    trigger.run(kafkaPayload);  // Kafka: algorithm-trigger, 메시지는 전체 AMR 상태
                 }
             }
 
@@ -199,6 +230,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             e.printStackTrace();
         }
     }
+
 
     private void handleTrafficRequest(Map<String, Object> json) {
         Map<String, Object> body = (Map<String, Object>) json.get("body");

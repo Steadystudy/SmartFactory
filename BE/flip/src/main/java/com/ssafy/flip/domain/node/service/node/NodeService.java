@@ -13,4 +13,6 @@ public interface NodeService {
 
     Node getNode(Integer nodeId);
 
+    Node getNodeFromCache(int nodeId);
+
 }
