@@ -26,6 +26,4 @@ public class Mission {
     @JoinColumn(name = "target_node_id", nullable = false)
     private Node node;
 
-    @Column(nullable = false)
-    private Integer amount;
 }
