@@ -63,6 +63,7 @@ ws_clients = [make_ws_client() for _ in range(20)]
 def handle_map_info(data, ws):
     global map_data, simulation_started
     if not simulation_started:
+        simulation_started = True
         print("[MAP_INFO] 맵 데이터 수신 완료")
         raw_map = data['body']['mapData']
 
@@ -93,7 +94,7 @@ def handle_map_info(data, ws):
 
         INTERSECTING_EDGE_PAIRS.update(compute_intersecting_edges(map_data))
 
-        simulation_started = True
+
         print("✅ 맵 저장 완료! 시뮬레이션 시작")
         start_simulation()
     else:
@@ -240,6 +241,23 @@ def start_simulation():
 
     print("🚀 시뮬레이션 시작!")
 
+    # 마지막 WebSocket 클라이언트에만 시작 메시지 전송
+    last_ws = ws_clients[-1]
+    start_message = {
+        "header": {
+            "msgName": "SIMULATION_START",
+            "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        },
+        "body": {
+            "message": "Simulation has started"
+        }
+    }
+    if last_ws.sock and last_ws.sock.connected:
+        try:
+            last_ws.send(json.dumps(start_message))
+        except Exception as e:
+            print(f"[WARN] 시작 메시지 전송 실패: {e}")
+
     amrs = setup_amrs(env, map_data)  # ✅ 전역 amrs에 저장
 
     threading.Thread(target=broadcast_status, daemon=True).start()
@@ -339,9 +357,9 @@ class AMR:
         self.current_submission_id = None
         self.current_edge_id = None
         self.current_speed = 0
-        if self.current_mission_type == "loading":
+        if self.current_mission_type == "LOADING":
             self.loaded = True
-        elif self.current_mission_type == "unloading":
+        elif self.current_mission_type == "UNLOADING":
             self.loaded = False
         self.update_status()
 
@@ -467,7 +485,7 @@ class AMR:
         self.update_status()
 
         # 5. 노드 방향 회전 처리 (charging, docking 등)
-        if node["nodeType"] in ("charging", "docking"):
+        if node["nodeType"] in ("CHARGING", "DOCKING"):
             target_dir = node["direction"]
             diff = (target_dir - self.dir + 360) % 360
             if diff > 180:
@@ -486,13 +504,13 @@ class AMR:
             self.update_status()
 
         # 6. docking 노드는 도착 후 작업 시간 5초간 대기
-        if node["nodeType"] == "docking":
+        if node["nodeType"] == "DOCKING":
             print(f"🛠️ {self.id} docking 작업 중 (5초)")
             for _ in range(int(5 / REALTIME_INTERVAL)):
                 yield self.env.timeout(REALTIME_INTERVAL)
 
         # 7. charging 노드에서는 충전
-        if node["nodeType"] == "charging":
+        if node["nodeType"] == "CHARGING":
             print(f"🔋 {self.id} 충전 시작 (100초 동안 1%씩)")
             for _ in range(int(100 / REALTIME_INTERVAL)):  # 100초 = 1초당 1%
                 self.battery += 0.01
