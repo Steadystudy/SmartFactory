@@ -25,7 +25,9 @@ export const MissionCard = ({ data }: MissionCardProps) => {
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return minutes > 0
+      ? `${minutes}분 ${remainingSeconds.toString().padStart(2, '0')}초`
+      : `${remainingSeconds.toString().padStart(2, '0')}초`;
   };
 
   const getStateColor = (state: AMRState) => {
@@ -89,16 +91,15 @@ export const MissionCard = ({ data }: MissionCardProps) => {
           <span className='text-sm'>{formatTime(data.expectedArrival)}</span>
         </div>
         <div className='flex justify-between'>
-          <span className='text-sm text-white '>현재 위치</span>
-          <span className='text-sm'>
-            ({data.startX.toFixed(2)}, {data.startY.toFixed(2)})
-          </span>
+          <span className='text-sm text-white '>실제 수행 시간 (수정)</span>
+          <span className='text-sm'>현재 시간 - 미션 시작(1초 갱신)</span>
         </div>
       </div>
 
       <div className='flex gap-2'>
-        <span className='px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-md'>{data.amrId}</span>
-        <span className='px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-md'>{data.type}</span>
+        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.amrId}</span>
+        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.type}</span>
+        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>배터리(수정)</span>
         {data.errorCode && (
           <span className='px-2 py-1 text-xs text-red-600 bg-red-100 rounded-md'>
             {data.errorCode}
