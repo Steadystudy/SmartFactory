@@ -5,6 +5,86 @@ export default async function Home() {
   const statsData = await getDashboardStats();
   const chartData = await getDashboardChart();
 
+  // API 응답 데이터를 카드 데이터 형식으로 변환
+  const cardData = [
+    {
+      title: 'AMR 가동 갯수',
+      value: `${statsData.amrWorking}대`,
+      subtext: [`/ 총 ${statsData.amrMaxNum}대`],
+      data: {
+        current: statsData.amrWorking,
+        total: statsData.amrMaxNum,
+        status: [
+          { label: '작동 중', value: statsData.amrWorking, total: statsData.amrMaxNum },
+          { label: '대기 중', value: statsData.amrWaiting, total: statsData.amrMaxNum },
+          { label: '충전 중', value: statsData.amrCharging, total: statsData.amrMaxNum },
+          { label: '에러', value: statsData.amrError, total: statsData.amrMaxNum }
+        ]
+      }
+    },
+    {
+      title: 'AMR 평균 가동률',
+      value: `${Math.floor((statsData.amrWorkTime / 480) * 100)}%`,
+      subtext: [
+        `${Math.floor(statsData.amrWorkTime / 60)}h ${statsData.amrWorkTime % 60}m / 8h`
+      ],
+      data: {
+        current: (statsData.amrWorkTime / 480) * 100,
+        total: 100,
+        status: [
+          {
+            label: '가동 시간',
+            value: (statsData.amrWorkTime / 480) * 100,
+            isTime: true,
+            timeValue: statsData.amrWorkTime
+          },
+          {
+            label: '미가동 시간',
+            value: 100 - (statsData.amrWorkTime / 480) * 100,
+            isTime: true,
+            timeValue: 480 - statsData.amrWorkTime
+          }
+        ]
+      }
+    },    
+    {
+      title: '창고 내 자재 상태',
+      value: `${Math.floor((statsData.storageQuantity / statsData.storageMaxQuantity) * 100)}%`,
+      subtext: [
+        `${statsData.storageQuantity}개 / ${statsData.storageMaxQuantity}개`
+      ],
+      data: {
+        current: statsData.storageQuantity,
+        total: statsData.storageMaxQuantity,
+        status: [
+          {
+            label: '자재 보유량',
+            value: statsData.storageQuantity,
+            storageTotal: statsData.storageMaxQuantity
+          },
+          {
+            label: '남은 수용량',
+            value: statsData.storageMaxQuantity - statsData.storageQuantity,
+            storageTotal: statsData.storageMaxQuantity
+          }
+        ]
+      }
+    },
+    {
+      title: '설비 가동 상태',
+      value: `${statsData.lineWorking}개`,
+      subtext: ['/총 20개'],
+      data: {
+        current: statsData.lineWorking,
+        total: 20,
+        status: [
+          { label: '가동 중', value: statsData.lineWorking, total: 20 },
+          { label: '미가동', value: 20 - statsData.lineWorking, total: 20 }
+        ]
+      }
+    }
+  ];
+
   // 현재 날짜와 시간 포맷팅
   const now = new Date();
   const formattedDate = now.toLocaleDateString('ko-KR', {
@@ -31,8 +111,8 @@ export default async function Home() {
 
       {/* Stats Grid */}
       <div className='grid grid-cols-1 gap-6 mb-6 md:grid-cols-4'>
-        {statsData.map((stat, index) => (
-          <StatsCard key={index} {...stat} />
+        {cardData.map((stat, index) => (
+          <StatsCard key={index} data={stat} />
         ))}
       </div>
 
