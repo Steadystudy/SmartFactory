@@ -6,6 +6,10 @@ from collections import deque
 import websocket
 import json
 from datetime import datetime
+import os
+# 최상단
+from dotenv import load_dotenv
+load_dotenv()  # .env 로부터 환경 변수 로드
 
 
 # ---------- 설정 ----------
@@ -17,7 +21,9 @@ amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
 simulation_started = False
-
+AMR_WS_URL = os.getenv("AMR_WS_URL")
+if not AMR_WS_URL:
+    raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
 
 # ---------- 메시지 핸들러 ----------
 def on_open(ws):
@@ -45,7 +51,7 @@ def on_message(ws, message):
 # ---------- WebSocket 서버 ----------
 def make_ws_client():
     return websocket.WebSocketApp(
-        "ws://k12s110.p.ssafy.io:8081/ws/amr",
+        AMR_WS_URL,
         on_message=on_message,
         on_open=on_open,
         on_close=on_close
