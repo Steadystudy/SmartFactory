@@ -12,6 +12,7 @@ import com.ssafy.flip.domain.node.repository.edge.EdgeRepository;
 import com.ssafy.flip.domain.node.repository.node.NodeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -57,24 +58,36 @@ public class MissionLogServiceImpl implements MissionLogService {
     }
 
     @Override
+    @Transactional
     public MissionLog saveWithRoutes(String amrId, String missionId, List<RouteTempDTO> routes) {
+        if (routes == null || routes.isEmpty()) {
+            throw new IllegalArgumentException("Route list must not be empty");
+        }
+
+        // 첫/마지막 경로로 MissionLog의 시작·종료 시간 설정
+        RouteTempDTO first = routes.get(0);
+        RouteTempDTO last  = routes.get(routes.size() - 1);
+
+        // 1) MissionLog 저장
         MissionLog log = missionLogRepository.save(
                 MissionLog.builder()
-                        .mission(missionService.getMission(String.valueOf(missionId)))
+                        .mission(missionService.getMission(missionId))
                         .amr(amrService.getById(amrId))
-                        .startedAt(routes.get(0).startedAt())
-                        .endedAt(routes.get(routes.size() - 1).endedAt())
+                        .startedAt(first.getStartedAt())
+                        .endedAt(last.getEndedAt())
                         .build()
         );
 
+        // 2) 각 RouteTempDTO → Route 엔티티 변환 후 저장
         for (RouteTempDTO r : routes) {
             routeRepository.save(
                     Route.builder()
                             .missionLog(log)
-                            .nodeId(nodeRepository.getReferenceById(r.nodeId()))
-                            .edgeId(edgeRepository.getReferenceById(r.edgeId()))
-                            .startedAt(r.startedAt())
-                            .endedAt(r.endedAt())
+                            // DTO는 getNodeId()/getEdgeId()로 접근
+                            .nodeId(nodeRepository.getReferenceById(r.getNodeId()))
+                            .edgeId(edgeRepository.getReferenceById(r.getEdgeId()))
+                            .startedAt(r.getStartedAt())
+                            .endedAt(r.getEndedAt())
                             .build()
             );
         }
