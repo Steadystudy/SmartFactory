@@ -79,7 +79,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 handleAmrState(jsonMap, session);
                 break;
             case "TRAFFIC_REQ":
-                handleTrafficRequest(jsonMap);
+                handleTrafficRequest(jsonMap, session);
                 break;
             case "SIMULATION_START":
                 handleStimulatorStart();
@@ -194,7 +194,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
 
 
-            statusService.saveAmr(amrDto, missionRequestDto, routeListJson); 
+            statusService.saveAmr(amrDto, missionRequestDto, routeListJson);
 
             Integer currentNode = amrDto.body().currentNode();
             Integer previousNode = previousNodeMap.put(amrId, currentNode);
@@ -208,7 +208,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                         nodeOccupants.put(previousNode, nextAmrId);
                         int nextSubmissionId = lastSubmissionMap.get(nextAmrId);
                         String nextMissionId = lastMissionMap.get(nextAmrId);
-                        sendTrafficPermit(nextAmrId, nextMissionId, nextSubmissionId, previousNode);
+                        sendTrafficPermit(nextAmrId, nextMissionId, nextSubmissionId, previousNode, session);
                     }
                 }
             }
@@ -219,37 +219,59 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     }
 
 
-    private void handleTrafficRequest(Map<String, Object> json) {
+    private void handleTrafficRequest(Map<String, Object> json, WebSocketSession session) {
         Map<String, Object> body = (Map<String, Object>) json.get("body");
         String amrId = (String) body.get("amrId");
         int nodeId = (Integer) body.get("nodeId");
         int submissionId = (Integer) body.get("submissionId");
         String missionId = (String) body.get("missionId");
 
-        System.out.println("\uD83D\uDEA6 TRAFFIC_REQ 수신: " + amrId + " → 노드 " + nodeId);
+        // 이 시점에 세션을 맵에 담아두면, 이후 sendTrafficPermit에서 항상 꺼낼 수 있습니다.
+        amrSessions.put(amrId, session);
+        log.info("▶ TRAFFIC_REQ: amrId={} sessionId={} 등록", amrId, session.getId());
+
+        // 기존 로직 그대로
+        System.out.println("🚥 TRAFFIC_REQ 수신: " + amrId + " → 노드 " + nodeId);
         nodeQueues.computeIfAbsent(nodeId, k -> new LinkedList<>());
 
         String currentOccupant = nodeOccupants.get(nodeId);
         if (currentOccupant == null) {
             nodeOccupants.put(nodeId, amrId);
-            sendTrafficPermit(amrId, missionId, submissionId, nodeId);
+            sendTrafficPermit(amrId, missionId, submissionId, nodeId, session);
         } else {
             nodeQueues.get(nodeId).add(amrId);
             System.out.println("대기열 추가됨: " + amrId + " → 노드 " + nodeId);
         }
     }
 
-    private void sendTrafficPermit(String amrId, String missionId, int submissionId, int nodeId) {
+    private void sendTrafficPermit(String amrId, String missionId, int submissionId, int nodeId, WebSocketSession session) {
         try {
-            Map<String, Object> traffic = new HashMap<>();
-            traffic.put("missionId", String.valueOf(missionId));
-            traffic.put("submissionId", submissionId);
-            traffic.put("nodeId", nodeId);
 
-            WebSocketSession session = amrSessions.get(amrId);
+            System.out.println("▶ sendTrafficPermit 호출: amrId=" + amrId
+                    + ", session=" + session + ", open=" + (session != null && session.isOpen()));
+
+            Map<String, Object> wrapper = new HashMap<>();
+
+            // 2) header 생성
+            Map<String, Object> header = new HashMap<>();
+            header.put("msgName", "TRAFFIC_PERMIT");
+            header.put("amrId", amrId);
+            header.put("time", LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")));
+            wrapper.put("header", header);
+
+            // 3) body 생성 (기존 traffic 맵 내용)
+            Map<String, Object> body = new HashMap<>();
+            body.put("missionId", missionId);
+            body.put("submissionId", submissionId);
+            body.put("nodeId", nodeId);
+            wrapper.put("body", body);
+
+            // 4) JSON 변환 & 전송
+            String message = objectMapper.writeValueAsString(wrapper);
+
 
             if (session != null && session.isOpen()) {
-                String message = objectMapper.writeValueAsString(traffic);
                 session.sendMessage(new TextMessage(message));
                 System.out.println("✅ Traffic Permit 전송 성공: " + message);
             } else {
