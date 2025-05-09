@@ -12,11 +12,11 @@ export const Model3DRenderer = () => {
 
   return (
     <>
-      {models?.map((amrInfo) => {
+      {models?.map((amrInfo, index) => {
         const position: [number, number, number] = [
-          amrInfo.locationX,
+          amrInfo.locationX + 0.35,
           ANIMATION_SETTINGS.height,
-          amrInfo.locationY,
+          amrInfo.locationY - 0.6,
         ];
         const rotation: [number, number, number] = [0, amrInfo.dir, 0];
         switch (amrInfo.type) {
@@ -45,6 +45,7 @@ export const Model3DRenderer = () => {
                 key={amrInfo.amrId}
                 position={position}
                 rotation={rotation}
+                loading={index % 2 === 0 ? true : false}
                 modelId={amrInfo.amrId}
               />
             );
