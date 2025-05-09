@@ -5,6 +5,7 @@ import math
 from collections import deque
 import websocket
 import json
+import random
 from datetime import datetime
 import os
 # 최상단
@@ -21,7 +22,7 @@ amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
 simulation_started = False
-AMR_WS_URL = os.getenv("AMR_WS_URL","ws://localhost:8080/ws/amr")
+AMR_WS_URL = os.getenv("AMR_WS_URL")
 if not AMR_WS_URL:
     raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
 
@@ -33,11 +34,13 @@ def on_close(ws):
     print(f"❌ WebSocket 연결 해제")
 
 def on_message(ws, message):
+
     try:
         data = json.loads(message)
         msg_name = data.get("header", {}).get("msgName")
+        print(f"▶ PARSED msgName={repr(msg_name)}")  # ← 추가
 
-        if msg_name == "MAP_INFO":
+        if   msg_name == "MAP_INFO":
             handle_map_info(data, ws)
         elif msg_name == "MISSION_ASSIGN":
             handle_mission_assign(data)
@@ -45,8 +48,11 @@ def on_message(ws, message):
             handle_mission_cancel(data)
         elif msg_name == "TRAFFIC_PERMIT":
             handle_traffic_permit(data)
+        else:
+            print("▶ Unhandled msgName:", repr(msg_name))  # ← 추가
     except Exception as e:
         print(f"❌ 메시지 처리 오류: {e}")
+
 
 # ---------- WebSocket 서버 ----------
 def make_ws_client():
@@ -137,27 +143,31 @@ def handle_mission_cancel(data):
 
 # ---------- 메시지 처리 함수 ----------
 def handle_traffic_permit(data):
-    permit = data['body']
-    mission_id = permit["missionId"]
-    submission_id = permit["submissionId"]
-    node_id = permit["nodeId"]
 
+    header = data.get("header", {})
+    amr_id = header.get("amrId")
+    if not amr_id:
+        print(f"❌ amrId 없음: {data}")
+        return
+
+    permit = data.get("body", {})
+    node_id = permit.get("nodeId")
+
+    print(f"[DEBUG] {amr_id} got TRAFFIC_PERMIT for node {node_id} at env.now={env.now if 'env' in globals() else 'unknown'}")
+
+
+    # amrId만으로 바로 처리
     for amr in amrs:
-        if (amr.current_mission_id == mission_id and
-                amr.current_submission_id == submission_id and
-                amr.waiting_for_traffic == (mission_id, submission_id, node_id)):
+        if amr.id != amr_id:
+            continue
 
-            with LOCK:
-                reserved = NODE_RESERVATIONS.get(node_id)
-                if reserved and reserved != amr.id:
-                    print(f"🛑 {amr.id} 접근 차단: 노드 {node_id}는 {reserved}가 예약 중")
-                    return
-                else:
-                    NODE_RESERVATIONS[node_id] = amr.id
-                    print(f"✅ {amr.id} 노드 {node_id} 접근 예약됨")
+        with LOCK:
+            NODE_RESERVATIONS[node_id] = amr.id
+            print(f"✅ {amr.id} 노드 {node_id} 접근 예약됨")
 
-            amr.traffic_event.set()
-            break
+        amr.traffic_event.set()
+        break
+
 
 
 def safe_send(ws, message, max_retries=3):
@@ -263,8 +273,6 @@ def start_simulation():
     threading.Thread(target=broadcast_status, daemon=True).start()
     threading.Thread(target=lambda: env.run(), daemon=True).start()
     threading.Thread(target=deadlock_monitor, daemon=True).start()
-    #1초휴식
-    time.sleep(1)
 
 # ---------- AMR 클래스 ----------
 class AMR:
@@ -276,7 +284,7 @@ class AMR:
         self.pos_y = pos_y
         self.dir = 0  # 방향(degree)
         self.state = 1  # 1: IDLE, 2: PROCESSING
-        self.battery = 100
+        self.battery = random.randint(60, 100)
 
         self.mission_queue = deque()
         self.current_mission = None
@@ -415,8 +423,7 @@ class AMR:
             }
         }
         ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req_message))
-
-
+        print(f"[DEBUG] {self.id} sent TRAFFIC_REQ for node {node['id']} at env.now={self.env.now}")
 
         # 3. 이동
         for _ in range(steps):
@@ -724,14 +731,13 @@ def broadcast_status():
 
                     if i < len(ws_clients):
                         try:
-                            print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
+                            #print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}")
                             ws_clients[i].send(json.dumps(message))
                         except Exception as e:
                             print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
                             print(f"❌ [BROADCAST] WebSocket 연결이 종료된 AMR: {amr_id}")
                             ws_clients[i].close()
 
-            #time.sleep(1000)
             time.sleep(0.1)
 
         except Exception as global_exception:
