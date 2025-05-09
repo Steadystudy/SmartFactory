@@ -56,11 +56,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         // WebSocketServiceImpl에서 JSON 데이터 가져옴
         String mapInfoJson = webSocketService.sendMapInfo();
         session.sendMessage(new TextMessage(mapInfoJson));
-        String amrId = extractAmrId(session); // 또는 session.getUri()에서 추출
-        log.info("✅ WebSocket 세션 등록됨: {}", amrId);
-        webSocketService.registerSession(amrId, session);
-
-
 
         // 직접 WebSocket 세션에 메시지 전송
         if (session.isOpen()) {
@@ -69,10 +64,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         } else {
             System.err.println("❌ WebSocket 세션이 닫혀 있음: " + session.getId());
         }
-    }
-    private String extractAmrId(WebSocketSession session) {
-        String uri = session.getUri().toString();
-        return uri.substring(uri.indexOf("=") + 1);
     }
 
     @Override
@@ -136,6 +127,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             Map<String, Object> body = (Map<String, Object>) json.get("body");
             String amrId = (String) body.get("amrId");
             amrSessions.put(amrId, session);
+
+            log.info("✅ WebSocket 세션 등록됨: {}", amrId);
+            webSocketService.registerSession(amrId, session);
 
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
             statusService.processAMRSTATUS(amrDto);
