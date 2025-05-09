@@ -12,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@RedisHash("amr")
+@RedisHash("AMR_STATUS")
 public class AmrStatusRedis {
 
     @Id
@@ -35,13 +35,6 @@ public class AmrStatusRedis {
     private String errorList;
 
     private String type;
-
-    private float startX;
-    private float startY;
-    private float targetX;
-    private float targetY;
-
-    private int expectedArrival;
 
     //submissionId, submissionNode, submissionX, submissionY로 구성
     private List<String> submissionList;

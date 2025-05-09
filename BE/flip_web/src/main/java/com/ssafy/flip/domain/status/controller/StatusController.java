@@ -25,7 +25,7 @@ public class StatusController {
 
     @PostMapping("/amr/save")
     public ResponseEntity<Object> saveAmr(@RequestBody AmrSaveRequestDTO requestDTO){
-        statusService.saveAmr(requestDTO);
+//        statusService.saveAmr(requestDTO);
         return ResponseEntity.ok(null);
         //return ResponseEntity.ok(new AmrMissionResponseDTO("AMR001", 0, 1, "MOVING", 2, "ERROR01", LocalDateTime.now(), "TYPE001", (float) 3.14, (float) 3.14, (float) 71.5, (float) 65.5, 620));
     }
@@ -33,7 +33,8 @@ public class StatusController {
     @Operation(summary = "amr mission status", description = "AMR이 Mission을 받았을 때의 최초 상태")
     @GetMapping("/amr/mission")
     public ResponseEntity<List<AmrMissionResponseDTO>> getAmrMissionStatus(@ModelAttribute AmrMissionRequestDTO requestDTO){
-        return ResponseEntity.ok(statusService.getAmrMissionStatus(requestDTO));
+        return null;
+//        return ResponseEntity.ok(statusService.getAmrMissionStatus(requestDTO));
     }
 
     @Operation(summary = "amr real time status", description = "AMR 실시간 상태")

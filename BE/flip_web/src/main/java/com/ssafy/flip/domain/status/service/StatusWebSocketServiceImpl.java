@@ -4,6 +4,7 @@ import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.status.dto.request.*;
 import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
+import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
@@ -15,6 +16,7 @@ import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -22,12 +24,13 @@ import java.util.Objects;
 public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
     private final SimpMessagingTemplate messagingTemplate;
-    private final AmrStatusRedisRepository amrStatusRedisRepository;
+    private final AmrStatusRedisManualRepository amrStatusRedisManualRepository;
     private final LineService lineService;
+    private final MissionService missionService;
 
     @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
-        Iterable<AmrStatusRedis> amrStatusIterable = amrStatusRedisRepository.findAll();
+        List<AmrStatusRedis> amrStatusIterable = amrStatusRedisManualRepository.findAllAmrStatus();
         List<AmrRealTimeDTO> amrRealTimeDTOList = new ArrayList<>();
 
         for (AmrStatusRedis amrStatus : amrStatusIterable) {
@@ -50,10 +53,18 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
     @Override
     public void pushMissionStatus(AmrMissionRequestDTO requestDTO) {
-        List<AmrMissionResponseDTO> amrMissionResponseDTOS = amrStatusRedisRepository.findAll()
-                .stream()
-                .map(AmrMissionResponseDTO::from)
+        //미션 저장
+        Map<String, AmrMissionDTO> amrMissionMap = missionService.getAmrMission();
+
+        List<AmrMissionResponseDTO> amrMissionResponseDTOS = amrStatusRedisManualRepository.findAllAmrStatus().stream()
+                .map(status -> {
+                    String rawAmrId = status.getAmrId();
+                    String amrId = rawAmrId.startsWith("AMR_STATUS:") ? rawAmrId.substring("AMR_STATUS:".length()) : rawAmrId;
+                    AmrMissionDTO missionDTO = amrMissionMap.get(amrId);
+                    return AmrMissionResponseDTO.from(status, missionDTO);
+                })
                 .toList();
+
         messagingTemplate.convertAndSend("/amr/mission", amrMissionResponseDTOS);
     }
 
