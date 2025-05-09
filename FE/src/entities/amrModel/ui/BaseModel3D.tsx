@@ -1,6 +1,5 @@
 'use client';
 
-import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useRef, useEffect, useMemo } from 'react';
 import { Model3DProps } from '../model/types';
@@ -14,14 +13,13 @@ const ANIMATION_SETTINGS = {
 };
 
 export const BaseModel3D = ({
-  modelPath,
+  scene,
   position,
   scale = 1,
   rotation,
   modelId,
   onClick,
 }: Model3DProps) => {
-  const { scene: originalScene } = useGLTF(modelPath);
   const { selectedAmrId, setSelectedAmrId } = useSelectedAMRStore();
   const { gl } = useThree();
 
@@ -47,8 +45,8 @@ export const BaseModel3D = ({
   };
 
   // 각 인스턴스마다 새로운 scene 클론 생성
-  const scene = useMemo(() => {
-    const clonedScene = originalScene.clone();
+  const instance = useMemo(() => {
+    const clonedScene = scene.clone();
     // material도 클론하여 독립적으로 관리
     clonedScene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
@@ -56,7 +54,7 @@ export const BaseModel3D = ({
       }
     });
     return clonedScene;
-  }, [originalScene]);
+  }, [scene]);
 
   const modelRef = useRef<THREE.Group>(null);
 
@@ -97,7 +95,7 @@ export const BaseModel3D = ({
 
   // hover 효과 적용
   useEffect(() => {
-    scene.traverse((child) => {
+    instance.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         if (selectedAmrId === modelId) {
           child.material.emissive = new THREE.Color(0x0000ff);
@@ -110,12 +108,12 @@ export const BaseModel3D = ({
         }
       }
     });
-  }, [selectedAmrId, scene, modelId]);
+  }, [selectedAmrId, instance, modelId]);
 
   return (
     <primitive
       ref={modelRef}
-      object={scene}
+      object={instance}
       scale={scale}
       className='cursor-pointer'
       onClick={handleClick}

@@ -7,6 +7,7 @@ import { AMRState } from '@/entities/amrModel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
 interface MissionCardProps {
   data: AMR_CARD_STATUS;
@@ -15,6 +16,20 @@ interface MissionCardProps {
 export const MissionCard = ({ data }: MissionCardProps) => {
   const { selectedAmrId, setSelectedAmrId, setTargetPosition, setStartPosition } =
     useSelectedAMRStore();
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+
+  useEffect(() => {
+    const calculateElapsedTime = () => {
+      const startTime = new Date(data.startedAt).getTime();
+      const currentTime = new Date().getTime();
+      return Math.floor((currentTime - startTime) / 1000); // 초 단위
+    };
+    setElapsedTime(calculateElapsedTime());
+    const timer = setInterval(() => {
+      setElapsedTime(calculateElapsedTime());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [data.startedAt]);
 
   const handleCardClick = () => {
     setSelectedAmrId(data.amrId);
@@ -91,8 +106,8 @@ export const MissionCard = ({ data }: MissionCardProps) => {
           <span className='text-sm'>{formatTime(data.expectedArrival)}</span>
         </div>
         <div className='flex justify-between'>
-          <span className='text-sm text-white '>실제 수행 시간 (수정)</span>
-          <span className='text-sm'>현재 시간 - 미션 시작(1초 갱신)</span>
+          <span className='text-sm text-white '>실제 수행 시간</span>
+          <span className='text-sm'>{formatTime(elapsedTime)}</span>
         </div>
       </div>
 
