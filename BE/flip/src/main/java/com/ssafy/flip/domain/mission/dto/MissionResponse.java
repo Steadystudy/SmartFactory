@@ -16,14 +16,14 @@ public class MissionResponse {
     private String amrId;
     private String missionId;
     private String missionType;
-    private List<Integer> route;
     private int expectedArrival;
+    private List<Integer> route;
 
-    public MissionResponse(String amrId, String missionId, String missionType, List<Integer> route, int expectedArrival) {
+    public MissionResponse(String amrId, String missionId, String missionType, int expectedArrival, List<Integer> route) {
         this.amrId = amrId;
         this.missionId = missionId;
         this.missionType = missionType;
-        this.route = route;
         this.expectedArrival = expectedArrival;
+        this.route = route;
     }
 }

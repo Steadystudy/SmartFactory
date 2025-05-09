@@ -12,16 +12,16 @@ public record AmrMissionResponseDTO(
     int submissionId,
     String errorCode,
     LocalDateTime timestamp,
+    int battery,
     String type,
     float startX,
     float startY,
     float targetX,
     float targetY,
     int expectedArrival,
-    int battery,
     LocalDateTime startedAt
 ) {
-    public static AmrMissionResponseDTO from(AmrStatusRedis amrStatusRedis) {
+    public static AmrMissionResponseDTO from(AmrStatusRedis amrStatusRedis, AmrMissionDTO missionDTO) {
         return new AmrMissionResponseDTO(
                 amrStatusRedis.getAmrId(),
                 amrStatusRedis.getState(), // state가 String이라 변환 필요
@@ -29,15 +29,15 @@ public record AmrMissionResponseDTO(
                 amrStatusRedis.getMissionType(),
                 amrStatusRedis.getSubmissionId(),
                 amrStatusRedis.getErrorList(),                      // errorList가 그냥 String
-                LocalDateTime.now(),                                // timestamp는 현재 시간
-                amrStatusRedis.getType(),
-                amrStatusRedis.getStartX(),
-                amrStatusRedis.getStartY(),
-                amrStatusRedis.getTargetX(),
-                amrStatusRedis.getTargetY(),
-                amrStatusRedis.getExpectedArrival(),
-                amrStatusRedis.getBattery(),
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                amrStatusRedis.getBattery(),                           // timestamp는 현재 시간
+                missionDTO.type(),
+                missionDTO.startX(),
+                missionDTO.startY(),
+                missionDTO.targetX(),
+                missionDTO.targetY(),
+                missionDTO.expectedArrival(),
+                missionDTO.startedAt()
         );
     }
 }
