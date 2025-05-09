@@ -4,6 +4,12 @@ import redis, json, time
 from datetime import datetime, timezone, timedelta
 import random
 import api   # 같은 디렉터리의 api.py 임포트
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
+KAFKA_HOST = os.getenv('KAFKA_HOST',"localhost")
+KAFKA_BOOT = os.getenv("KAFKA_BOOT", "localhost:9092")
 # -------------------- ① Redis → Python --------------------
 def fetch_robot_list() -> list[tuple[str, int, int]]:
     robot_list = []
@@ -46,8 +52,7 @@ def fetch_line_status() -> list[tuple[int, float]]:
 
 # -------------------- ② 알고리즘 실행 --------------------
 
-#KAFKA_BOOT = os.getenv("KAFKA_BOOT", "localhost:9092")
-KAFKA_BOOT = os.getenv("KAFKA_BOOT", "k12s110.p.ssafy.io:9092")
+
 consumer = Consumer({
     "bootstrap.servers": KAFKA_BOOT,
     "group.id": "algorithm-grp",
@@ -58,7 +63,7 @@ consumer = Consumer({
 producer = Producer({"bootstrap.servers": KAFKA_BOOT})
 
 #r = redis.Redis(host="localhost", port=6379, decode_responses=True)
-r = redis.Redis(host="k12s110.p.ssafy.io", port=6379, decode_responses=True)
+r = redis.Redis(host=KAFKA_HOST, port=6379, decode_responses=True)
 
 def publish_result(result: dict):
     print("결과")
@@ -83,12 +88,13 @@ def listen_loop():
 
         all_results = []  # ✅ 전체 결과 리스트 초기화
 
-        for (amr_id, _, _), (dest, _), path, cost in assign:
+        for (amr_id, _, _), (dest, _), type, path, cost in assign:
             if cost >= 900 or path is None:
                 continue
             result = {
                 "amrId"  : amr_id,
-                "mission": dest,
+                "missionId": dest,
+                "missionType" : type, #미션 타입 "MOVING", "CHARGING"...
                 "route"  : path
             }
             all_results.append(result)

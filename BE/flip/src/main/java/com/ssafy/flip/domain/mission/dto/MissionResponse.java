@@ -14,12 +14,14 @@ import java.util.List;
 public class MissionResponse {
 
     private String amrId;
-    private int mission;
+    private String missionId;
+    private String missionType;
     private List<Integer> route;
 
-    public MissionResponse(String amrId, int mission, List<Integer> route) {
+    public MissionResponse(String amrId, String missionId, String missionType, List<Integer> route) {
         this.amrId = amrId;
-        this.mission = mission;
+        this.missionId = missionId;
+        this.missionType = missionType;
         this.route = route;
     }
 }
