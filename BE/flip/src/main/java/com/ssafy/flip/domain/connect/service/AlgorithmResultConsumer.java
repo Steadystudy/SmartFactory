@@ -35,6 +35,7 @@ public class AlgorithmResultConsumer {
                 // ① Redis AMR_STATUS:* 업데이트
                 String key = "AMR_STATUS:" + res.getAmrId();
                 redis.opsForHash().put(key, "missionId",      String.valueOf(res.getMissionId()));
+                redis.opsForHash().put(key, "missionType",      String.valueOf(res.getMissionType()));
                 redis.opsForHash().put(key, "submissionList", mapper.writeValueAsString(res.getRoute()));
                 System.out.println(res);
 

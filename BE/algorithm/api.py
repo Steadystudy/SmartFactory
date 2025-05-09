@@ -32,10 +32,10 @@ conn = pymysql.connect(
 
 
 def mapInit():
-    global nodes, edges, graph
+    global nodes, edges, graph, missions
 
     with conn.cursor() as cursor:
-        # ① Node 정보 가져오기
+        # ① Node 정보
         cursor.execute("SELECT node_id, x, y FROM node")
         node_rows = cursor.fetchall()
         for row in node_rows:
@@ -44,7 +44,7 @@ def mapInit():
                 'y': row['y']
             }
 
-        # ② Edge 정보 가져오기
+        # ② Edge 정보
         cursor.execute("""
             SELECT edge_direction, speed, node1_node_id AS node1, node2_node_id AS node2
             FROM edge
@@ -53,21 +53,29 @@ def mapInit():
         for edge in edge_rows:
             edges.append(edge)
 
-    # ③ 그래프 생성
+        # ③ Mission 정보 (추가)
+        cursor.execute("""
+            SELECT mission_id, mission_type, target_node_id
+            FROM mission
+        """)
+        mission_rows = cursor.fetchall()
+        for row in mission_rows:
+            missions[row['target_node_id']] = row['mission_type']
+            
+        print(missions)
+
+    # ④ 그래프 생성
     for edge in edges:
         node1 = edge['node1']
         node2 = edge['node2']
-        direction = edge['edge_direction'].lower()  # ENUM 대소문자 대비
+        direction = edge['edge_direction'].lower()
         speed = edge['speed']
 
-        # 거리 계산
         x1, y1 = nodes[node1]['x'], nodes[node1]['y']
         x2, y2 = nodes[node2]['x'], nodes[node2]['y']
         distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        weight = distance
 
-        weight = distance  # 또는 speed
-
-        # 방향 처리
         if direction == 'twoway':
             graph.setdefault(node1, []).append((node2, weight))
             graph.setdefault(node2, []).append((node1, weight))
@@ -78,7 +86,7 @@ def mapInit():
         else:
             raise ValueError(f"Unknown direction: {direction}")
 
-    print("✅ 그래프 생성 완료")
+    print("✅ 그래프 및 미션 정보 로딩 완료")
 
 def aStar(start, end):
     if end>=1000:
@@ -203,7 +211,7 @@ def hungarian(robotList, taskList):
         print(f"   📍 경로: {path}")
 
     print(f"\n✅ 총 거리 비용: {total:.2f}")
-    return [(robotList[i], taskList[j], routes[i][j], cost_matrix[i][j])
+    return [(robotList[i], taskList[j],missions[dest], routes[i][j], cost_matrix[i][j])
             for i, j in zip(row_ind, col_ind)], total
 
 # --- 맨 아래의 “demo 코드” 삭제 -----------------------------
@@ -229,6 +237,7 @@ def assign_tasks(robot_list: list[tuple[str, int, int]],
 nodes = {}
 edges = []
 graph = {}
+missions = {}  # ✅ 미션 추가
 # # #맵 생성
 # mapInit()
 # #astar알고리즘(현재 가고있는 노드,시작노드,끝점)
@@ -244,4 +253,4 @@ graph = {}
 # taskList = [(idx+11,val) for idx,val in enumerate(lineStatus) if val >= 28]
 # taskList.sort(key=lambda x: x[1], reverse=True)
 # #로봇의 현재 노드 위치[20개], 일의의
-# result=hungarian(robotList,taskList)
+# assign,_=hungarian(robotList,taskList)
