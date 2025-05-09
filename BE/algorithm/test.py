@@ -95,7 +95,8 @@ def listen_loop():
                 "amrId"  : amr_id,
                 "missionId": dest,
                 "missionType" : type, #미션 타입 "MOVING", "CHARGING"...
-                "route"  : path
+                "route"  : path,
+                "expectedArrival" : int(cost)
             }
             all_results.append(result)
 
