@@ -29,19 +29,18 @@ public record MissionAssignDTO(
     ) {}
 
     public record SubmissionDTO(
-            String submissionId,
-            String nodeId,
-            String edgeId
+            int submissionId,
+            int nodeId,
+            int edgeId
     ) {
         @JsonCreator
         public SubmissionDTO(
-            @JsonProperty("submissionId") String submissionId,
-            @JsonProperty("nodeId") String nodeId,
-            @JsonProperty("edgeId") String edgeId
+                @JsonProperty("submissionId") String submissionId,
+                @JsonProperty("nodeId") String nodeId,
+                @JsonProperty("edgeId") String edgeId
         ) {
-            this.submissionId = submissionId;
-            this.nodeId = nodeId;
-            this.edgeId = edgeId;
+            this(Integer.parseInt(submissionId), Integer.parseInt(nodeId), Integer.parseInt(edgeId));
         }
+
     }
 }
