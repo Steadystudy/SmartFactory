@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.flip.domain.connect.dto.response.EdgeDTO;
 import com.ssafy.flip.domain.connect.dto.response.MapInfoDTO;
+import com.ssafy.flip.domain.connect.dto.response.MissionAssignDTO;
 import com.ssafy.flip.domain.connect.dto.response.NodeDTO;
 import com.ssafy.flip.domain.mission.dto.MissionResponse;
 import com.ssafy.flip.domain.node.entity.Edge;
@@ -105,12 +106,10 @@ public class WebSocketServiceImpl implements WebSocketService {
         return dummyJson;
     }
 
-    @Value("simulator.url")
-    String url;
     public void sendMission(String amrId, MissionResponse res) {
         try {
             List<Integer> route = res.getRoute();
-            List<ObjectNode> submissions = new ArrayList<>();
+            List<MissionAssignDTO.SubmissionDTO> submissions = new ArrayList<>();
 
             for (int i = 1; i < route.size(); i++) {
                 int prev = route.get(i - 1);
@@ -122,31 +121,22 @@ public class WebSocketServiceImpl implements WebSocketService {
 
                 String edgeId = edgeService.getEdgeKeyToIdMap().getOrDefault(edgeKey, "UNKNOWN");
 
-                ObjectNode submission = objectMapper.createObjectNode();
-                submission.put("submissionId", String.valueOf(i));  // 1부터 시작
-                submission.put("nodeId", String.valueOf(curr));     // 현재 노드
-                submission.put("edgeId", edgeId);                   // 엣지 ID
-
-                submissions.add(submission);
+                submissions.add(new MissionAssignDTO.SubmissionDTO(
+                        String.valueOf(i),
+                        String.valueOf(curr),
+                        edgeId));
             }
 
-            ObjectNode header = objectMapper.createObjectNode();
-            header.put("msgName", "MISSION_ASSIGN");
-            header.put("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
-            header.put("amrId", amrId);
-
-            ObjectNode body = objectMapper.createObjectNode();
-            body.put("missionId", String.valueOf(res.getMission()));
-            body.put("missionType", "MOVING");
-            body.set("submissions", objectMapper.valueToTree(submissions));
-
-            ObjectNode root = objectMapper.createObjectNode();
-            root.set("header", header);
-            root.set("body", body);
-
-            String payload = objectMapper.writeValueAsString(root);
+            MissionAssignDTO missionAssignDTO = MissionAssignDTO.of(
+                    amrId,
+                    res.getMissionId(),
+                    res.getMissionType(),
+                    submissions
+            );
+            
+            String payload = objectMapper.writeValueAsString(missionAssignDTO);
             System.out.println("payload는 이값입니다 : "+payload);
-            WebSocketSession session = amrSessions.get(url);
+            WebSocketSession session = amrSessions.get(amrId);
 
             if (session != null && session.isOpen()) {
                 session.sendMessage(new TextMessage(payload));
