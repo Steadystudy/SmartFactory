@@ -21,10 +21,10 @@ public class StatusController {
         //카프카 들고올
         String missionId = amrSaveRequestDTO.body().missionId();
         //misionId로 알고리즘 서버를 통해서 경로를 들고와야함
-        MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);  // 더미 호출
+//        MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);  // 더미 호출
 
 
-        statusService.saveAmr(amrSaveRequestDTO,missionRequestDto, null);
+//        statusService.saveAmr(amrSaveRequestDTO,missionRequestDto, null);
         return ResponseEntity.ok(null);
         //return ResponseEntity.ok(new AmrMissionResponseDTO("AMR001", 0, 1, "MOVING", 2, "ERROR01", LocalDateTime.now(), "TYPE001", (float) 3.14, (float) 3.14, (float) 71.5, (float) 65.5, 620));
     }

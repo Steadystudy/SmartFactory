@@ -8,6 +8,7 @@ import com.ssafy.flip.domain.log.service.MissionLogService;
 import com.ssafy.flip.domain.status.dto.request.*;
 import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
+import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import com.ssafy.flip.domain.storage.entity.Storage;
 import com.ssafy.flip.domain.storage.service.StorageService;
@@ -28,7 +29,7 @@ import java.util.stream.StreamSupport;
 @RequiredArgsConstructor
 public class StatusServiceImpl implements StatusService{
 
-    private final AmrStatusRedisRepository amrStatusRedisRepository;
+    private final AmrStatusRedisManualRepository amrStatusRedisManualRepository;
 
     private final StorageService storageService;
 
@@ -41,62 +42,8 @@ public class StatusServiceImpl implements StatusService{
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Override
-    @Transactional
-    public void saveAmr(AmrSaveRequestDTO requestDTO) {
-        AmrStatusRedis amrStatusRedis = AmrStatusRedis.builder()
-                .amrId(requestDTO.amrId())
-                .x(requestDTO.x())
-                .y(requestDTO.y())
-                .direction(requestDTO.direction())
-                .state(requestDTO.state())
-                .battery(requestDTO.battery())
-                .loading(requestDTO.loading())
-                .linearVelocity(requestDTO.linearVelocity())
-                .currentNode(requestDTO.currentNode())
-                .missionId(requestDTO.missionId())
-                .missionType(requestDTO.missionType())
-                .submissionId(requestDTO.submissionId())
-                .errorList(requestDTO.errorList())
-                .type(requestDTO.type())
-                .startX(requestDTO.startX())
-                .startY(requestDTO.startY())
-                .targetX(requestDTO.targetX())
-                .targetY(requestDTO.targetY())
-                .expectedArrival(requestDTO.expectedArrival())
-                .submissionList(requestDTO.submissionList())
-                .routeList(requestDTO.routeList())
-                .build();
-
-        amrStatusRedisRepository.save(amrStatusRedis);
-    }
-
-    @Override
-    public List<AmrMissionResponseDTO> getAmrMissionStatus(AmrMissionRequestDTO requestDTO) {
-        Iterable<AmrStatusRedis> amrStatusIterable = amrStatusRedisRepository.findAll();
-
-        return StreamSupport.stream(amrStatusIterable.spliterator(), false)
-                .filter(amr -> matchesMissionType(requestDTO.mission(), amr))
-                .filter(amr -> matchesAmrType(requestDTO.amrType(), amr))
-                .filter(amr -> matchesAmrState(requestDTO.amrState(), amr))
-                .map(AmrMissionResponseDTO::from)
-                .collect(Collectors.toList());
-    }
-
-    private boolean matchesMissionType(String mission, AmrStatusRedis amr) {
-        return mission == null || mission.isEmpty() || mission.equals(amr.getMissionType());
-    }
-
-    private boolean matchesAmrType(String amrType, AmrStatusRedis amr) {
-        return amrType == null || amrType.isEmpty() || amrType.equals(amr.getType());
-    }
-
-    private boolean matchesAmrState(String amrState, AmrStatusRedis amr) {
-        return amrState == null || amrState.isEmpty() || amrState.equals(amr.getState());
-    }
-
-    @Override
     public AmrRealTimeResponseDTO getAmrRealTimeStatus() {
-        Iterable<AmrStatusRedis> amrStatusIterable = amrStatusRedisRepository.findAll();
+        List<AmrStatusRedis> amrStatusIterable = amrStatusRedisManualRepository.findAllAmrStatus();
         List<AmrRealTimeDTO> amrRealTimeDTOList = new ArrayList<>();
 
         for (AmrStatusRedis amrStatus : amrStatusIterable) {
@@ -108,7 +55,7 @@ public class StatusServiceImpl implements StatusService{
 
     @Override
     public MissionStatusResponseDTO getRouteStatus(String amrId) {
-        AmrStatusRedis amrStatusRedis = amrStatusRedisRepository.findById(amrId)
+        AmrStatusRedis amrStatusRedis = amrStatusRedisManualRepository.findByAmrId(amrId)
                 .orElseThrow();
 
         return MissionStatusResponseDTO.from(amrStatusRedis);
@@ -122,7 +69,7 @@ public class StatusServiceImpl implements StatusService{
     @Override
     public FactoryStatusResponseDTO getFactoryStatus() {
 
-        Iterable<AmrStatusRedis> amrStatusIterable = amrStatusRedisRepository.findAll();
+        List<AmrStatusRedis> amrStatusIterable = amrStatusRedisManualRepository.findAllAmrStatus();
 
         Map<Integer, Long> statusCounts = StreamSupport.stream(amrStatusIterable.spliterator(), false)
                 .collect(Collectors.groupingBy(AmrStatusRedis::getState, Collectors.counting()));

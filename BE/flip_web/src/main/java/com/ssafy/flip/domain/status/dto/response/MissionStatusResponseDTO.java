@@ -13,7 +13,11 @@ public record MissionStatusResponseDTO(
         List<SubmissionDTO> submissionDTOList = new ArrayList<>();
         ObjectMapper objectMapper = new ObjectMapper();
 
-        for (String submissionJson : amrStatusRedis.getSubmissionList()) {
+        List<String> submissionList = amrStatusRedis.getSubmissionList();
+        int submissionId = amrStatusRedis.getSubmissionId(); // 기준 인덱스
+
+        for (int i = submissionId; i < submissionList.size(); i++) {
+            String submissionJson = submissionList.get(i);
             try {
                 SubmissionDTO dto = objectMapper.readValue(submissionJson, SubmissionDTO.class);
                 submissionDTOList.add(dto);

@@ -132,17 +132,19 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             webSocketService.registerSession(amrId, session);
 
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
-            statusService.processAMRSTATUS(amrDto);
+
             String missionId = amrDto.body().missionId();
             int currentSubmission = amrDto.body().submissionId();
             int nodeId = amrDto.body().currentNode();
             int edgeId = amrDto.body().currentEdge();
 
+            //미션 수행 중이면 저장
             if(missionId != null) {
                 lastMissionMap.put(amrId, missionId);
             }
             Integer lastSubmission = lastSubmissionMap.get(amrId);
 
+            //서브미션이 바뀌면 서브미션이 끝난 것이므로 routeTempMap에 임시 저장
             if (lastSubmission != null && !lastSubmission.equals(currentSubmission)) {
                 LocalDateTime now = LocalDateTime.now();
                 routeTempMap.computeIfAbsent(amrId, k -> new ArrayList<>()).add(
@@ -157,11 +159,12 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 );
                 submissionStartMap.put(amrId, now);
                 lastSubmissionMap.put(amrId, currentSubmission);
-            } else if (lastSubmission == null) {
+            } else if (lastSubmission == null) { //서브미션이 NULL이라면 미션 수행중이 아님
                 submissionStartMap.put(amrId, LocalDateTime.now());
                 lastSubmissionMap.put(amrId, currentSubmission);
             }
 
+            //미션이 끝났다면 state가 1이므로 저장된 routeTempMap이 있다면 db에 저장
             if (amrDto.body().state() == 1) {
                 List<RouteTempDTO> routeTemps = routeTempMap.get(amrId);
                 if (routeTemps != null && !routeTemps.isEmpty()) {
@@ -169,13 +172,12 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     routeTempMap.remove(amrId);
                     submissionStartMap.remove(amrId);
                     lastSubmissionMap.remove(amrId);
+
                     /// 내가 추가해줘야하는곳 ( 미션이 끝나는곳)
                     String kafkaPayload = objectMapper.writeValueAsString(amrDto);
                     trigger.run(kafkaPayload);  // Kafka: algorithm-trigger, 메시지는 전체 AMR 상태
                 }
             }
-
-            MissionRequestDto missionRequestDto = statusService.Algorithim(missionId);
 
             List<RouteTempDTO> temps = routeTempMap.getOrDefault(amrId, Collections.emptyList());
             List<String> routeListJson = temps.stream()
@@ -192,13 +194,12 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     })
                     .collect(Collectors.toList());
 
-
-
-            statusService.saveAmr(amrDto, missionRequestDto, routeListJson);
+            statusService.saveAmr(amrDto, routeListJson);
 
             Integer currentNode = amrDto.body().currentNode();
             Integer previousNode = previousNodeMap.put(amrId, currentNode);
 
+            // 목적 노드가 바뀌면 대기하고 있던 다음 amr에 permit 보내줌
             if (previousNode != null && !previousNode.equals(currentNode)) {
                 if (amrId.equals(nodeOccupants.get(previousNode))) {
                     nodeOccupants.remove(previousNode);

@@ -12,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@RedisHash("amr")
+@RedisHash("AMR_STATUS")
 public class AmrStatusRedis {
 
     @Id
@@ -36,14 +36,7 @@ public class AmrStatusRedis {
 
     private String type;//AMR타입
 
-    private float startX;
-    private float startY;
-    private float targetX;
-    private float targetY;
-
-    private int expectedArrival;
-
-    //submissionId, submissionNode, submissionX, submissionY로 구성,JSON
+    //submissionId, submissionNode, submissionX, submissionY, startedAt으로 구성,JSON
     private List<String> submissionList;
     //지나간 루트를 표시
     //routeId(순서), routeNode, startedAt으로 구성,JSON
