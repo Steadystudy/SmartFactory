@@ -8,10 +8,6 @@ import java.util.List;
 
 public interface StatusService {
 
-    void saveAmr(AmrSaveRequestDTO requestDTO);
-
-    List<AmrMissionResponseDTO> getAmrMissionStatus(AmrMissionRequestDTO requestDTO);
-
     AmrRealTimeResponseDTO getAmrRealTimeStatus();
 
     MissionStatusResponseDTO getRouteStatus(String amrId);

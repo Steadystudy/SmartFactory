@@ -1,6 +1,8 @@
 package com.ssafy.flip.domain.status.dto.request;
 
 
+import java.util.List;
+
 public record AmrSaveRequestDTO(
         Header header,
         Body body
@@ -24,6 +26,7 @@ public record AmrSaveRequestDTO(
             String missionType,
             int submissionId,
             float linearVelocity,
-            String errorList
+            String errorList,
+            List<String> routeList
     ) {}
 }
