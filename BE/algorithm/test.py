@@ -22,9 +22,9 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
         amr_id   = h["amrId"] if "amrId" in h else f"AMR{i:03}"
         node_id  = int(h.get("currentNode", 0))           # 없으면 0
 
-        excluded_ids = {204, 205, 212, 213, 220, 221, 228, 229}
-        robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
-        node_id=random.sample(robot_candidates, k=1)[0]
+        # excluded_ids = {204, 205, 212, 213, 220, 221, 228, 229}
+        # robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
+        # node_id=random.sample(robot_candidates, k=1)[0]
 
         loading  = 1 if str(h.get("loading", "false")).lower() == "true" else 0
         robot_list.append((amr_id, node_id, loading))
@@ -100,8 +100,6 @@ def listen_loop():
             all_results.append(result)
 
         if all_results:  # ✅ 1개의 메시지로 전송
-            print("결과")
-            print(all_results)
             producer.produce("algorithm-result", json.dumps(all_results))
             producer.flush()
 
