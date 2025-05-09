@@ -15,4 +15,5 @@ export type AMR_CARD_STATUS = Pick<
   | 'targetX'
   | 'targetY'
   | 'expectedArrival'
+  | 'startedAt'
 >;

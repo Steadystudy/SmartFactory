@@ -6,7 +6,6 @@ import { useEffect, useRef } from 'react';
 export const Map3D = () => {
   const group = useRef(null);
   const { scene, animations } = useGLTF('/Factory.glb');
-  // console.log(scene.children[0].children.filter((obj) => obj.name.includes('Line'))[0].children);
   const { actions } = useAnimations(animations, group);
 
   useEffect(() => {

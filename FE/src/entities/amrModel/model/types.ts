@@ -1,3 +1,5 @@
+import { Group, Object3DEventMap } from 'three';
+
 // AMR 상태 정의
 export enum AMRState {
   ERROR = 0,
@@ -36,6 +38,7 @@ export interface AMRInfo {
   prevX: number;
   prevY: number;
   expectedArrival: number;
+  startedAt: string;
 }
 
 // 모델 정보 인터페이스 (3D 렌더링용)
@@ -55,8 +58,9 @@ export interface Model3DProps {
   position: [number, number, number];
   scale?: number;
   rotation: [number, number, number];
-  modelPath: string;
+  scene: Group<Object3DEventMap>;
   modelId: string;
   onClick?: () => void;
   className?: string;
+  loading?: boolean;
 }
