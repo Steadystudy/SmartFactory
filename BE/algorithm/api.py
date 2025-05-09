@@ -1,48 +1,73 @@
 from scipy.optimize import linear_sum_assignment
 import heapq
-import math
 import json
 import random
 import numpy as np
 
+import pymysql
+import math
+import os
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
+
+# 환경 변수에서 DB 정보 가져오기
+DB_HOST = os.getenv('DB_HOST',"localhost")
+DB_PORT = int(os.getenv('DB_PORT',"3307"))
+DB_USER = os.getenv('DB_USER',"root")
+DB_PASSWORD = os.getenv('DB_PASSWORD',"1234")
+DB_NAME = os.getenv('DB_NAME',"flip")
+
+# DB 연결
+conn = pymysql.connect(
+    host=DB_HOST,
+    port=DB_PORT,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    database=DB_NAME,
+    charset='utf8mb4',
+    cursorclass=pymysql.cursors.DictCursor
+)
+
+
 def mapInit():
-    # 2. 맵데이터 읽기 (노드 정보)
-    with open('맵데이터.txt', 'r', encoding='utf-8') as file:
-        buffer = ''
-        for line in file:
-            buffer += line.strip()
-            if buffer.endswith('}'):
-                block = json.loads(buffer.replace('null', 'null'))
-                nodes[block['ID']] = block
-                buffer = ''
+    global nodes, edges, graph
 
-    # 3. 엣지데이터 읽기 (엣지 정보)
-    with open('edge.txt', 'r', encoding='utf-8') as file:
-        buffer = ''
-        for line in file:
-            buffer += line.strip()
-            if buffer.endswith('}'):
-                block = json.loads(buffer.replace('null', 'null'))
-                edges.append(block)
-                buffer = ''
+    with conn.cursor() as cursor:
+        # ① Node 정보 가져오기
+        cursor.execute("SELECT node_id, x, y FROM node")
+        node_rows = cursor.fetchall()
+        for row in node_rows:
+            nodes[row['node_id']] = {
+                'x': row['x'],
+                'y': row['y']
+            }
 
-    # 4. 그래프 생성
+        # ② Edge 정보 가져오기
+        cursor.execute("""
+            SELECT edge_direction, speed, node1_node_id AS node1, node2_node_id AS node2
+            FROM edge
+        """)
+        edge_rows = cursor.fetchall()
+        for edge in edge_rows:
+            edges.append(edge)
 
+    # ③ 그래프 생성
     for edge in edges:
         node1 = edge['node1']
         node2 = edge['node2']
-        direction = edge['direction']
+        direction = edge['edge_direction'].lower()  # ENUM 대소문자 대비
         speed = edge['speed']
 
-        # 거리 계산 (x, y 좌표 필요)
+        # 거리 계산
         x1, y1 = nodes[node1]['x'], nodes[node1]['y']
         x2, y2 = nodes[node2]['x'], nodes[node2]['y']
         distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
-        # 원하는 가중치 설정
-        weight = distance  # 또는 speed  (여기선 '거리'를 weight로 쓴다)
+        weight = distance  # 또는 speed
 
-        # 양방향 연결이면 둘 다 추가
+        # 방향 처리
         if direction == 'twoway':
             graph.setdefault(node1, []).append((node2, weight))
             graph.setdefault(node2, []).append((node1, weight))
@@ -51,8 +76,9 @@ def mapInit():
         elif direction == 'rearward':
             graph.setdefault(node2, []).append((node1, weight))
         else:
-            print(direction)
             raise ValueError(f"Unknown direction: {direction}")
+
+    print("✅ 그래프 생성 완료")
 
 def aStar(start, end):
     if end>=1000:
@@ -203,7 +229,6 @@ def assign_tasks(robot_list: list[tuple[str, int, int]],
 nodes = {}
 edges = []
 graph = {}
-
 # # #맵 생성
 # mapInit()
 # #astar알고리즘(현재 가고있는 노드,시작노드,끝점)
