@@ -60,4 +60,10 @@ public class StatusController {
     public ResponseEntity<FactoryStatusResponseDTO> getFactoryStatus(){
         return ResponseEntity.ok(statusService.getFactoryStatus());
     }
+
+    @Operation(summary = "output status", description = "생산량 정보 확인")
+    @GetMapping("/production")
+    public ResponseEntity<ProductionResponseDTO> getProductionStatus(){
+        return ResponseEntity.ok(statusService.getProductionStatus());
+    }
 }

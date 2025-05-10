@@ -27,7 +27,13 @@ public class MissionLogServiceImpl implements MissionLogService {
     }
 
     @Override
-    public List<MissionLog> findBefore8hour() {
-        return missionRepository.findByEndedAtBefore(LocalDateTime.now().minusHours(8));
+    public List<MissionLog> findBeforeHour(int hour) {
+        return missionRepository.findByEndedAtBefore(LocalDateTime.now().minusHours(hour));
     }
+
+    @Override
+    public List<MissionLog> findRecentMissionLogsByMissionIds(List<String> missionIds, LocalDateTime thresholdTime) {
+        return missionRepository.findRecentMissionLogsByMissionIds(missionIds, thresholdTime);
+    }
+
 }

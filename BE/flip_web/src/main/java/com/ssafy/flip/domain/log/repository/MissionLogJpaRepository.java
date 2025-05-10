@@ -3,6 +3,7 @@ package com.ssafy.flip.domain.log.repository;
 import com.ssafy.flip.domain.log.entity.MissionLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,4 +22,11 @@ public interface MissionLogJpaRepository extends JpaRepository<MissionLog, Long>
     AND mi.missionType <> 'MOVING'
     """)
     List<MissionLog> findByEndedAtBefore(LocalDateTime startTime);
+
+    @Query("SELECT ml FROM MissionLog ml " +
+            "WHERE ml.mission.missionId IN :missionIds " +
+            "AND ml.endedAt >= :thresholdTime")
+    List<MissionLog> findRecentMissionLogsByMissionIds(
+            @Param("missionIds") List<String> missionIds,
+            @Param("thresholdTime") LocalDateTime thresholdTime);
 }
