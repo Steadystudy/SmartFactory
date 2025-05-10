@@ -15,4 +15,6 @@ public interface StatusService {
     LineStatusResponseDTO getLineStatus();
 
     FactoryStatusResponseDTO getFactoryStatus();
+
+    ProductionResponseDTO getProductionStatus();
 }

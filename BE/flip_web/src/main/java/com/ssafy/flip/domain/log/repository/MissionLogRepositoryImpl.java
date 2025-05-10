@@ -28,4 +28,10 @@ public class MissionLogRepositoryImpl implements MissionLogRepository {
     public List<MissionLog> findByEndedAtBefore(LocalDateTime endTime) {
         return missionLogJpaRepository.findByEndedAtBefore(endTime);
     }
+
+    @Override
+    public List<MissionLog> findRecentMissionLogsByMissionIds(List<String> missionIds, LocalDateTime thresholdTime) {
+        return missionLogJpaRepository.findRecentMissionLogsByMissionIds(missionIds, thresholdTime);
+    }
+
 }
