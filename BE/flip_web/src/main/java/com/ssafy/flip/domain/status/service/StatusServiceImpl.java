@@ -22,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -82,7 +83,7 @@ public class StatusServiceImpl implements StatusService{
 
         //DB에서 시간 들고와서 계산
         //Redis에서 현재 데이터 들고와서 계산
-        List<MissionLog> missionLogs = missionLogService.findBefore8hour();
+        List<MissionLog> missionLogs = missionLogService.findBeforeHour(8);
 
         int amrWorkTime = 0;
         LocalDateTime now = LocalDateTime.now();
@@ -143,5 +144,44 @@ public class StatusServiceImpl implements StatusService{
                 storageQuantity,
                 storageMaxQuantity,
                 LocalDateTime.now());
+    }
+
+    @Override
+    public ProductionResponseDTO getProductionStatus() {
+
+        List<String> productMissions = new ArrayList<>();
+        for (int i = 51; i <= 60; i++) {
+            productMissions.add("MISSION0" + i);
+        }
+
+        LocalDateTime roundedNow = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0); // 정시로 절삭
+        LocalDateTime thresholdTime = roundedNow.minusHours(6);
+
+        List<MissionLog> missionLogs = missionLogService.findRecentMissionLogsByMissionIds(
+                productMissions, thresholdTime
+        );
+
+        Map<Integer, Long> countByHour = groupMissionLogsByHour(missionLogs);
+
+        List<ProductionResponseDTO.ProductionDataDTO> data = new ArrayList<>();
+        for (int hour = thresholdTime.getHour()+1; hour <= roundedNow.getHour(); hour++) {
+            long productionCount = countByHour.getOrDefault(hour, 0L);  // 해당 시간대에 로그가 없으면 0
+            data.add(new ProductionResponseDTO.ProductionDataDTO(
+                    hour,                            // timestamp (시간)
+                    (int) productionCount*10,           // production (해당 시간대의 MissionLog 개수)
+                    150                               // target 고정값
+            ));
+        }
+
+        return new ProductionResponseDTO(data);
+    }
+
+    private Map<Integer, Long> groupMissionLogsByHour(List<MissionLog> missionLogs) {
+        return missionLogs.stream()
+                .collect(Collectors.groupingBy(
+                        log -> log.getStartedAt().getHour(),
+                        TreeMap::new,
+                        Collectors.counting()
+                ));
     }
 }

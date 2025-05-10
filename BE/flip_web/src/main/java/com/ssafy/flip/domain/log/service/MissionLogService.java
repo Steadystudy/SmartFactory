@@ -12,5 +12,7 @@ public interface MissionLogService {
 
     MissionLog getMission(Long id);
 
-    List<MissionLog> findBefore8hour();
+    List<MissionLog> findBeforeHour(int hour);
+
+    List<MissionLog> findRecentMissionLogsByMissionIds(List<String> missionIds, LocalDateTime thresholdTime);
 }
