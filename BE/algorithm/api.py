@@ -177,7 +177,7 @@ def hungarian(robotList, taskList):
     n, m = len(robotList), len(taskList)
     if n > m:                                # 더미 작업 보충
         for k in range(n - m):
-            taskList.append((1000 + k, 0))
+            taskList.append((k, 0))
     taskList = taskList[:n]
 
     cost_matrix = np.zeros((n, n))
