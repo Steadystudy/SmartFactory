@@ -177,7 +177,7 @@ def hungarian(robotList, taskList):
     n, m = len(robotList), len(taskList)
     if n > m:                                # 더미 작업 보충
         for k in range(n - m):
-            taskList.append((k, 0))
+            taskList.append((1000+k, 0))
     taskList = taskList[:n]
 
     cost_matrix = np.zeros((n, n))
@@ -209,9 +209,13 @@ def hungarian(robotList, taskList):
         state = "적재" if loaded else "비적재"
         print(f"🦾 로봇{robot_name} 노드:{robot_id}({state}) → 작업 {dest} | 거리 {cost:.2f}")
         print(f"   📍 경로: {path}")
+        if dest<1000:
+            missionType=missions[dest]
+        else:
+            missionType="dummy"
 
     print(f"\n✅ 총 거리 비용: {total:.2f}")
-    return [(robotList[i], taskList[j],missions[dest], routes[i][j], cost_matrix[i][j])
+    return [(robotList[i], taskList[j],missionType, routes[i][j], cost_matrix[i][j])
             for i, j in zip(row_ind, col_ind)], total
 
 # --- 맨 아래의 “demo 코드” 삭제 -----------------------------
