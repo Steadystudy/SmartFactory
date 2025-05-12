@@ -22,7 +22,7 @@ amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
 simulation_started = False
-AMR_WS_URL = os.getenv("AMR_WS_URL")
+AMR_WS_URL = os.getenv("AMR_WS_URL","ws://localhost:8080/ws/amr")
 if not AMR_WS_URL:
     raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
 

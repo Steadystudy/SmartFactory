@@ -9,8 +9,8 @@ import com.ssafy.flip.domain.connect.dto.request.AmrMissionDTO;
 import com.ssafy.flip.domain.mission.dto.MissionResponse;
 import com.ssafy.flip.domain.node.entity.Node;
 import com.ssafy.flip.domain.node.repository.node.NodeJpaRepository;
-import com.ssafy.flip.domain.status.dto.request.MissionRequestDto;
 import com.ssafy.flip.domain.status.service.StatusService;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -18,10 +18,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 @Slf4j
@@ -37,90 +35,129 @@ public class AlgorithmResultConsumer {
     private final NodeJpaRepository nodeJpaRepository;
     private final StatusService statusService;
 
-    @KafkaListener(topics = "algorithm-result",
-            groupId = "flip-algorithm-group",
-            concurrency = "4")
-    public void applyResult(String msg) {
 
+    // ✅ 지연 미션 저장용 해시맵
+    @Getter
+    private final Map<String, MissionResponse> delayedMissionMap = new ConcurrentHashMap<>();
+
+    @KafkaListener(topics = "algorithm-result", groupId = "flip-algorithm-group", concurrency = "4")
+    public void applyResult(String msg) {
         List<AmrMissionDTO> amrMissionList = new ArrayList<>();
 
         try {
-            // ✅ JSON 배열 → List<MissionResponse>
             List<MissionResponse> responses = mapper.readValue(
-                    msg,
-                    new TypeReference<List<MissionResponse>>() {}
+                    msg, new TypeReference<List<MissionResponse>>() {}
             );
 
             for (MissionResponse res : responses) {
-                // ① Redis AMR_STATUS:* 업데이트
-                String key = "AMR_STATUS:" + res.getAmrId();
-                redis.opsForHash().put(key, "missionId",      String.valueOf(res.getMissionId()));
-                redis.opsForHash().put(key, "missionType",      String.valueOf(res.getMissionType()));
-                redis.opsForHash().put(key, "submissionList", mapper.writeValueAsString(res.getRoute()));
-                System.out.println(res);
+                List<MissionResponse> split = splitRoute(res);
+                MissionResponse now = split.get(0);
 
-                String amrId = res.getAmrId();
-                // ② WebSocket으로 AMR에게 개별 미션 전송
-                ws.sendMission(amrId, res);
+                // 첫 미션 즉시 처리
+                processMission(now, amrMissionList);
 
-                String type = amrJpaRepository.findById(amrId)
-                        .map(AMR::getType)
-                        .orElseThrow(() -> new IllegalArgumentException("해당 AMR 없음"));
-
-                List<Integer> routes = res.getRoute();
-                int startNodeId = routes.getFirst();
-                int targetNodeId = routes.getLast();
-
-                Node startNodeDto = nodeJpaRepository.findById(startNodeId)
-                        .orElseThrow(() -> new RuntimeException("노드 정보 없음: " + startNodeId));
-                Node targetNodeDto = nodeJpaRepository.findById(targetNodeId)
-                        .orElseThrow(() -> new RuntimeException("노드 정보 없음: " + targetNodeId));
-
-                // ✅ submissionList 생성
-                List<String> submissionList = IntStream.range(0, routes.size())
-                        .mapToObj(i -> {
-                            int submissionId = i + 1;
-                            int nodeId = routes.get(i);
-
-                            Node node = nodeJpaRepository.findById(nodeId)
-                                    .orElseThrow(() -> new RuntimeException("노드 정보 없음: " + nodeId));
-
-                            Map<String, Object> jsonMap = new LinkedHashMap<>();
-                            jsonMap.put("submissionId", submissionId);
-                            jsonMap.put("submissionNode", nodeId);
-                            jsonMap.put("submissionX", node.getX());
-                            jsonMap.put("submissionY", node.getY());
-
-                            try {
-                                return mapper.writeValueAsString(jsonMap);
-                            } catch (JsonProcessingException e) {
-                                throw new RuntimeException("JSON 변환 실패", e);
-                            }
-                        })
-                        .toList();
-
-                statusService.updateSubmissionList(amrId, submissionList);
-
-                amrMissionList.add(new AmrMissionDTO(
-                        amrId,
-                        type,
-                        startNodeDto.getX(),
-                        startNodeDto.getY(),
-                        targetNodeDto.getX(),
-                        targetNodeDto.getY(),
-                        res.getExpectedArrival(),
-                        LocalDateTime.now()
-                ));
+                // 두 번째 미션은 해시맵에 저장
+                if (split.size() > 1) {
+                    MissionResponse delayed = split.get(1);
+                    delayedMissionMap.put(delayed.getAmrId(), delayed);
+                    log.info("🕓 미션 분할 저장: AMR={}, 미션ID={}", delayed.getAmrId(), delayed.getMissionId());
+                }
             }
 
-            String payload = mapper.writeValueAsString(amrMissionList);
-            System.out.println("Web Trigger: "+payload);
-
-            webTrigger.run(payload);
 
         } catch (Exception e) {
-            log.error("알고리즘 결과 처리 실패", e);
+            log.error("❗ 알고리즘 결과 처리 실패", e);
         }
+
     }
 
+    // ✅ 미션 즉시 실행 로직 (WebSocket 전송 포함)
+    public void processMission(MissionResponse res, List<AmrMissionDTO> amrMissionList) throws JsonProcessingException {
+        String amrId = res.getAmrId();
+
+        String key = "AMR_STATUS:" + amrId;
+        redis.opsForHash().put(key, "missionId", String.valueOf(res.getMissionId()));
+        redis.opsForHash().put(key, "missionType", String.valueOf(res.getMissionType()));
+        redis.opsForHash().put(key, "submissionList", mapper.writeValueAsString(res.getRoute()));
+
+        ws.sendMission(amrId, res);
+
+        String type = amrJpaRepository.findById(amrId)
+                .map(AMR::getType)
+                .orElse("UNKNOWN");
+
+        List<Integer> routes = res.getRoute();
+        int startNodeId = routes.getFirst();
+        int targetNodeId = routes.getLast();
+
+        Node startNode = nodeJpaRepository.findById(startNodeId)
+                .orElseThrow(() -> new RuntimeException("노드 정보 없음: " + startNodeId));
+        Node targetNode = nodeJpaRepository.findById(targetNodeId)
+                .orElseThrow(() -> new RuntimeException("노드 정보 없음: " + targetNodeId));
+
+        List<String> submissionList = IntStream.range(0, routes.size())
+                .mapToObj(i -> {
+                    int nodeId = routes.get(i);
+                    Node node = nodeJpaRepository.findById(nodeId).orElseThrow();
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("submissionId", i + 1);
+                    map.put("submissionNode", nodeId);
+                    map.put("submissionX", node.getX());
+                    map.put("submissionY", node.getY());
+                    try {
+                        return mapper.writeValueAsString(map);
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException("JSON 직렬화 실패", e);
+                    }
+                }).toList();
+
+        statusService.updateSubmissionList(amrId, submissionList);
+
+        amrMissionList.add(new AmrMissionDTO(
+                amrId,
+                type,
+                startNode.getX(), startNode.getY(),
+                targetNode.getX(), targetNode.getY(),
+                res.getExpectedArrival(),
+                LocalDateTime.now()
+        ));
+
+    }
+
+    // ✅ 미션 분할 로직
+    private List<MissionResponse> splitRoute(MissionResponse res) {
+        List<Integer> route = res.getRoute();
+        Set<Integer> splitPoints = new HashSet<>();
+        IntStream.rangeClosed(1, 10).forEach(splitPoints::add);
+        IntStream.rangeClosed(21, 30).forEach(splitPoints::add);
+        IntStream.rangeClosed(41, 50).forEach(splitPoints::add);
+
+        for (int i = route.size() - 2; i >= 0; i--) {
+            int node = route.get(i);
+            if (splitPoints.contains(node)) {
+                List<Integer> r1 = new ArrayList<>(route.subList(0, i + 1));
+                List<Integer> r2 = new ArrayList<>(route.subList(i, route.size()));
+
+                MissionResponse part1 = new MissionResponse(
+                        res.getAmrId(),
+                        String.valueOf(r1.get(r1.size() - 1)),
+                        res.getMissionType(),
+                        res.getExpectedArrival(),
+                        r1
+                );
+
+                MissionResponse part2 = new MissionResponse(
+                        res.getAmrId(),
+                        res.getMissionId(),
+                        "LOADING",
+                        res.getExpectedArrival(),
+                        r2
+                );
+
+                return List.of(part1, part2);
+            }
+        }
+
+        return List.of(res); // 분리 불가 → 단일 미션 유지
+    }
 }
