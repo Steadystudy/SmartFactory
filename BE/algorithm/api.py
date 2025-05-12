@@ -86,40 +86,36 @@ def mapInit():
         else:
             raise ValueError(f"Unknown direction: {direction}")
 
-    print("✅ 그래프 및 미션 정보 로딩 완료")
 
-def aStar(start, end):
-    if end>=1000:
-        return None , 0
-    open_set = []  # (f_score, node) 저장하는 heap
-    heapq.heappush(open_set, (0, start))
+def aStar(start, end, start_time=0):
+    if end >= 1000:
+        return None, 0
 
-    came_from = {}  # 최단 경로를 복구하기 위한 dict
-    g_score = {start: 0}  # 시작 노드까지의 실제 거리
+    open_set = []  # (f_score, time, node)
+    heapq.heappush(open_set, (0, start_time, start, []))  # (f, t, node, path)
+
+    visited = set()
 
     while open_set:
-        current_f, current = heapq.heappop(open_set)
+        f, t, node, path = heapq.heappop(open_set)
+        if (node, t) in visited:
+            continue
+        visited.add((node, t))
 
-        if current == end:
-            # 경로 복구
-            path = [current]
-            while current in came_from:
-                current = came_from[current]
-                path.append(current)
-            path.reverse()
-            return path, g_score[end]  # 경로, 최단 거리
+        path = path + [(node, t)]
 
-        for neighbor, weight in graph.get(current, []):
-            tentative_g = g_score[current] + weight
+        if node == end:
+            total_cost = t - start_time
+            return path, total_cost
 
-            if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                came_from[neighbor] = current
-                g_score[neighbor] = tentative_g
-                f_score = tentative_g + heuristic(neighbor, end)
-                heapq.heappush(open_set, (f_score, neighbor))
+        for neighbor, weight in graph.get(node, []):
+            next_time = t + math.ceil(weight)
+            g = next_time - start_time
+            h = heuristic(neighbor, end)
+            heapq.heappush(open_set, (g + h, next_time, neighbor, path))
 
-    # 경로 없음
     return None, float('inf')
+
 
 # 휴리스틱 함수 (유클리드 거리)
 def heuristic(node1, node2):
@@ -136,44 +132,36 @@ def needs_unload(task_id: int) -> bool:
 
 
 # ---------- 로봇‑작업 1쌍에 대한 비용·경로 계산 ----------
-PICKUP_NODES = (101, 124, 114)          # 적재 지점 3곳
-EXTRA_PICKUP_COST = 6                   # 적재 소요 시간(코스트)
 
-def calc_cost_and_route(start_node: int,
-                        loaded: int,
-                        task_dest: int) -> tuple[list[int] | None, float]:
-    """start_node: 현재 로봇 위치, loaded: 0/1, task_dest: 목적지 노드"""
-    # 더미 작업(1000 이상)은 0 코스트
-    if task_dest >= 1000:
-        return [start_node], 0.0
+def calc_cost_and_route(start_node: int,task_dest: int):
+    if needs_load(task_dest):
+        return min(MovingTimeTable[start_node][i] + loadingTimeTable[i+1][task_dest] for i in range(10))
+    elif needs_unload(task_dest):
+        if 21<=task_dest<=30:
+            return MovingTimeTable[start_node][task_dest-11]
+        elif 41<=task_dest<=50:
+            return MovingTimeTable[start_node][task_dest-21]
+        else:
+            print("오류 적재 반납 미션 이외의 목적지 : ", task_dest)
+    elif task_dest==80:
+        return 0
+    else:
+        print("알수 없는 목적지 : ", task_dest)
 
-    # ① 상태가 이미 만족되는 경우 → 그냥 A*
-    if (loaded == 1 and needs_load(task_dest)) or \
-       (loaded == 0 and needs_unload(task_dest)) or \
-       (not needs_load(task_dest) and not needs_unload(task_dest)):
-        return aStar(start_node, task_dest)
+def extract_unique_nodes_nonconsecutive(path):
+    result = []
+    prev_node = None
+    for node, _ in path:
+        if node != prev_node:
+            result.append(node)
+            prev_node = node
+    return result
 
-    # ② (0 → 1) 적재가 필요한데 현재 비적재인 경우
-    if loaded == 0 and needs_load(task_dest):
-        best_cost = float("inf")
-        best_route = None
-        for p in PICKUP_NODES:
-            r1, c1 = aStar(start_node, p)
-            r2, c2 = aStar(p, task_dest)
-            if not r1 or not r2:
-                continue
-            total = c1 + c2 + EXTRA_PICKUP_COST
-            if total < best_cost:
-                best_cost = total
-                best_route = r1[:-1] + r2       # 중복 노드(픽업 지점) 제거
-        return best_route, best_cost
-
-    # ③ (1 → 0) 비적재 작업인데 현재 적재인 경우 → 할 수 없음(∞ 비용)
-    return None, 999
 
 
 # ---------- 헝가리안 알고리즘 ----------
 def hungarian(robotList, taskList):
+    robotList = [robot for robot in robotList if robot[2] == 0]
     n, m = len(robotList), len(taskList)
     if n > m:                                # 더미 작업 보충
         for k in range(n - m):
@@ -181,41 +169,75 @@ def hungarian(robotList, taskList):
     taskList = taskList[:n]
 
     cost_matrix = np.zeros((n, n))
-    routes = [[None]*n for _ in range(n)]
 
     for i in range(n):
         _,start_node, loaded = robotList[i]     # 위치, 적재 여부
         for j in range(n):
             dest, _ = taskList[j]
-            r, c = calc_cost_and_route(start_node, loaded, dest)
-            routes[i][j] = r
-            cost_matrix[i][j] = c
+            cost_matrix[i][j] = calc_cost_and_route(start_node, dest)
 
     # 헝가리안 수행 (불가능 매칭은 ∞ 비용으로 자동 제외)
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
-    # 결과 출력 (∞ 비용은 매칭에서 빠짐)
+    # 매칭 결과를 점수 기준으로 정렬
+    assignments = sorted([(taskList[j][1], i, j) for i, j in zip(row_ind, col_ind)],reverse=True)
     total = 0
-    print("\n🔗 매칭 결과")
-    for i, j in zip(row_ind, col_ind):
-        robot_name,robot_id, loaded = robotList[i]
-        dest, score = taskList[j]
-        cost = cost_matrix[i][j]
-        path = routes[i][j]
-        if math.isinf(cost):
-            print(f"❌ 로봇 {robot_id} → 작업 {dest} (불가능)")
+    LoadingStartTime=[[-10] for _ in range(11)]
+    aStarResult=[[] for _ in range(n)]
+    for score, i, j in assignments:
+        robot_name, robot_id, loaded = robotList[i]
+        dest, _ = taskList[j]
+        start_node = robot_id
+
+        if math.isinf(cost_matrix[i][j]):
             continue
-        total += cost
-        state = "적재" if loaded else "비적재"
-        print(f"🦾 로봇{robot_name} 노드:{robot_id}({state}) → 작업 {dest} | 거리 {cost:.2f}")
-        print(f"   📍 경로: {path}")
-        if dest<1000:
-            missionType=missions[dest]
+
+        final_path = []
+        total_cost = 0
+        
+
+        if needs_load(dest):
+            best_p, best_ready, best_done = None, None, float('inf')
+            for p in range(1,11):
+                arrival = MovingTimeTable[start_node][p-1]
+                waitTime = 0
+                for absTime in LoadingStartTime[p]:
+                    if abs(absTime-arrival)<10:
+                        waitTime=absTime+10-arrival         # 대기 포함
+                done    = arrival+waitTime + loadingTimeTable[p][dest] # 목적지까지
+
+                if done < best_done:
+                    best_p, best_start,best_ready, best_done = p, arrival+waitTime,waitTime, done # 적재 포트,적재 시작 시간,대기시간,끝나는시간
+
+            # 스케줄 기록
+            LoadingStartTime[best_p].append(best_start)
+
+            #print(f"📦 로봇 {robot_name} → 포트 {best_p} "f"({best_start}s 적재 시작, {best_ready}s 대기)")
+
+            to_pickup, c1 = aStar(start_node, best_p)
+            to_dest,   c2 = aStar(best_p, dest, c1+EXTRA_PICKUP_COST)
+            final_path, total_cost = to_pickup + to_dest, c1 + c2
+
+        elif needs_unload(dest):
+            to_dest, c1 = aStar(start_node, dest)
+            to_next, c2 = aStar(dest, (dest % 10) + 50, c1 if to_dest else 0)
+            if to_dest and to_next:
+                final_path = to_dest + to_next
+                total_cost = c1 + c2
+            else:
+                print(f"❌ 비적재 경로 없음: {start_node} → {dest} → {(dest % 10) + 50}")
+                continue
+
         else:
-            missionType="dummy"
+            final_path, total_cost = aStar(start_node, dest)
+        total+=total_cost
+        aStarResult[i].append(extract_unique_nodes_nonconsecutive(final_path))
+        aStarResult[i].append(total_cost)
+        # print(f"🛣️ 경로: {[(n, t) for n, t in final_path]}")
+        # print(f"🦾 로봇{robot_name} {start_node} → {dest} | 총 A* 비용: {total_cost:.2f} | 점수 {score}")
 
     print(f"\n✅ 총 거리 비용: {total:.2f}")
-    return [(robotList[i], taskList[j],missionType, routes[i][j], cost_matrix[i][j])
+    return [(robotList[i], taskList[j],missions[dest],aStarResult[i][0], aStarResult[i][1])
             for i, j in zip(row_ind, col_ind)], total
 
 # --- 맨 아래의 “demo 코드” 삭제 -----------------------------
@@ -242,19 +264,51 @@ nodes = {}
 edges = []
 graph = {}
 missions = {}  # ✅ 미션 추가
-# # #맵 생성
-# mapInit()
-# #astar알고리즘(현재 가고있는 노드,시작노드,끝점)
-# print(aStar(11,51))
+loadingTimeTable=[[0 for _ in range(41)] for _ in range(11)] # 1~10번 노드가 자재 놓는곳 까지 최적 시간
+MovingTimeTable=[[0 for _ in range(30)] for _ in range(233)] # 현재 노드에서 자재없는 미션 가는 곳 까지 최적 시간
+
+# #맵 생성
+mapInit()
+#astar알고리즘(현재 가고있는 노드,시작노드,끝점)
+for start in range(1,11):
+    for end in range(11,21):
+        loadingTimeTable[start][end]=aStar(start,end,0)[1]
+    for end in range(31,41):
+        loadingTimeTable[start][end]=aStar(start,end,0)[1]
+for start in range(233):
+    for end in range(10):
+        MovingTimeTable[start][end]=aStar(start,end+1,0)[1]
+        MovingTimeTable[start][end+10]=aStar(start,end+21,0)[1]
+        MovingTimeTable[start][end+20]=aStar(start,end+41,0)[1]
+
+
+EXTRA_PICKUP_COST = 10                 # 적재 소요 시간(코스트)
+print("✅ 그래프 및 미션 정보 로딩 완료")
+
+
+
 # #현재 가동 가능한 로봇수
 # robot=20
 # excluded_ids = {204, 205, 212, 213, 220, 221, 228, 229}
 # robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
 # #(현재 위치 , 0은 적재안함 1은 적재상태 , 
-# robotList = [(robotName,rid, random.randint(0, 1)) for robotName,rid in enumerate(random.sample(robot_candidates, k=robot))]
+# robotList = [(robotName,rid,random.randint(0,1)) for robotName,rid in enumerate(random.sample(robot_candidates, k=robot))]
 # lineStatus = random.sample(range(1, 61), 40)
-# print(lineStatus)
-# taskList = [(idx+11,val) for idx,val in enumerate(lineStatus) if val >= 28]
+# taskList = [(idx+11,val) for idx,val in enumerate(lineStatus) if val >= 38]
 # taskList.sort(key=lambda x: x[1], reverse=True)
 # #로봇의 현재 노드 위치[20개], 일의의
 # assign,_=hungarian(robotList,taskList)
+# all_results = []  # ✅ 전체 결과 리스트 초기화
+
+# for (amr_id, _, _), (dest, _), type, path, cost in assign:
+#     if cost == 0 or path is None:
+#         continue
+#     result = {
+#         "amrId"  : amr_id,
+#         "missionId": dest,
+#         "missionType" : type, #미션 타입 "MOVING", "CHARGING"...
+#         "route"  : path,
+#         "expectedArrival" : int(cost)
+#     }
+#     all_results.append(result)
+# print(all_results)
