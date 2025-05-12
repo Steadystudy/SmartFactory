@@ -99,13 +99,14 @@ def listen_loop():
                 "expectedArrival" : int(cost)
             }
             all_results.append(result)
-
+        print(all_results)
         if all_results:  # ✅ 1개의 메시지로 전송
+            
             producer.produce("algorithm-result", json.dumps(all_results))
             producer.flush()
 
 
 if __name__ == "__main__":
     print("메세지 생성")
-    api.mapInit()
+    #api.mapInit()
     listen_loop()
