@@ -25,3 +25,9 @@ export interface DashboardData {
   subtext: string[];
   data: StatData;
 }
+
+export interface ProductionOverviewData {
+  timestamps: string[];
+  production: number[];
+  target: number[];
+}
