@@ -60,7 +60,6 @@ public class AlgorithmResultConsumer {
                 if (split.size() > 1) {
                     MissionResponse delayed = split.get(1);
                     delayedMissionMap.put(delayed.getAmrId(), delayed);
-                    log.info("🕓 미션 분할 저장: AMR={}, 미션ID={}", delayed.getAmrId(), delayed.getMissionId());
                 }
             }
 
@@ -74,7 +73,6 @@ public class AlgorithmResultConsumer {
     // ✅ 미션 즉시 실행 로직 (WebSocket 전송 포함)
     public void processMission(MissionResponse res, List<AmrMissionDTO> amrMissionList) throws JsonProcessingException {
         String amrId = res.getAmrId();
-
         String key = "AMR_STATUS:" + amrId;
         redis.opsForHash().put(key, "missionId", String.valueOf(res.getMissionId()));
         redis.opsForHash().put(key, "missionType", String.valueOf(res.getMissionType()));
@@ -140,7 +138,7 @@ public class AlgorithmResultConsumer {
 
                 MissionResponse part1 = new MissionResponse(
                         res.getAmrId(),
-                        String.valueOf(r1.get(r1.size() - 1)),
+                        String.format("MISSION%03d", r1.get(r1.size() - 1)),
                         res.getMissionType(),
                         res.getExpectedArrival(),
                         r1
@@ -153,6 +151,7 @@ public class AlgorithmResultConsumer {
                         res.getExpectedArrival(),
                         r2
                 );
+
 
                 return List.of(part1, part2);
             }

@@ -85,7 +85,9 @@ public class MissionLogServiceImpl implements MissionLogService {
                             .missionLog(log)
                             // DTO는 getNodeId()/getEdgeId()로 접근
                             .nodeId(nodeRepository.getReferenceById(r.getNodeId()))
-                            .edgeId(edgeRepository.getReferenceById(r.getEdgeId()))
+                            .edgeId(edgeRepository.findById(r.getEdgeId())
+                                    .orElseThrow(() -> new IllegalArgumentException("❌ 존재하지 않는 edge_id: " + r.getEdgeId()))
+                            )
                             .startedAt(r.getStartedAt())
                             .endedAt(r.getEndedAt())
                             .build()
