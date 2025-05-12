@@ -1,8 +1,9 @@
-import { StatsCard } from '@/features/dashboard';
-import { getDashboardStats } from '@/features/dashboard/api/dashboard';
+import { StatsCard, OverviewChart } from '@/features/dashboard';
+import { getDashboardChart, getDashboardStats } from '@/features/dashboard/api/dashboard';
 
 export default async function Home() {
   const statsData = await getDashboardStats();
+  const chartData = await getDashboardChart();
 
   // API 응답 데이터를 카드 데이터 형식으로 변환
   const cardData = [
@@ -116,7 +117,7 @@ export default async function Home() {
 
       {/* Charts Section */}
       <div className='max-h-[480px] grid grid-cols-3 gap-4'>
-        <div className='lg:col-span-2'>
+        <div className='col-span-2'>
           <OverviewChart {...chartData} />
         </div>
 
