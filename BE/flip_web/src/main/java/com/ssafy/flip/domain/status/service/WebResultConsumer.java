@@ -2,6 +2,7 @@ package com.ssafy.flip.domain.status.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.status.dto.response.AmrMissionDTO;
 import com.ssafy.flip.domain.status.dto.response.AmrMissionResponseDTO;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
@@ -22,6 +23,7 @@ public class WebResultConsumer {
     private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisRepository amrStatusRedisRepository;
     private final MissionService missionService;
+    private final LineService lineService;
 
     private final ObjectMapper mapper;
 

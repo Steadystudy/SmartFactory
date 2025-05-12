@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -72,5 +73,17 @@ public class StatusServiceImpl implements StatusService{
         } catch (JsonProcessingException e) {
             System.out.println(e.toString());
         }
+    }
+
+    @Override
+    public void saveLine(LineSaveRequestDTO requestDTO) {
+        String key = "LINE_STATUS:" + requestDTO.lineId();
+
+        Map<String, String> map = new HashMap<>();
+        map.put("cycleTime", String.valueOf(requestDTO.cycleTime()));
+        map.put("status", String.valueOf(requestDTO.status()));
+        map.put("lastInputTime", String.valueOf(LocalDateTime.now()));
+
+        stringRedisTemplate.opsForHash().putAll(key, map);
     }
 }
