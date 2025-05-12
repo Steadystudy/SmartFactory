@@ -37,6 +37,8 @@ public class WebResultConsumer {
                     new TypeReference<List<AmrMissionDTO>>() {}
             );
 
+            System.out.println("mission "+msg);
+
             //미션 저장
             Map <String, AmrMissionDTO> amrMissionMap = missionService.setAmrMission(responses);
 
