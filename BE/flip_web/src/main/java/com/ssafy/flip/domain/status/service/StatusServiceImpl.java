@@ -164,7 +164,10 @@ public class StatusServiceImpl implements StatusService{
         Map<Integer, Long> countByHour = groupMissionLogsByHour(missionLogs);
 
         List<ProductionResponseDTO.ProductionDataDTO> data = new ArrayList<>();
-        for (int hour = thresholdTime.getHour()+1; hour <= roundedNow.getHour(); hour++) {
+        for (LocalDateTime time = thresholdTime.plusHours(1);
+             !time.isAfter(roundedNow);
+             time = time.plusHours(1)) {
+            int hour = time.getHour();
             long productionCount = countByHour.getOrDefault(hour, 0L);  // 해당 시간대에 로그가 없으면 0
             data.add(new ProductionResponseDTO.ProductionDataDTO(
                     hour,                            // timestamp (시간)
