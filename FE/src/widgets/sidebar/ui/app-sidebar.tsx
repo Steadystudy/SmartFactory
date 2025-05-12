@@ -38,23 +38,23 @@ export function AppSidebar() {
         <SidebarContent>
           <SidebarGroup>
             {/* Logo Section */}
-            <SidebarHeader className="flex justify-between">
+            <SidebarHeader className="flex justify-between px-1.5">
               {/* <div className="flex items-center">
                 <span className="text-xl font-bold text-white">FLIP</span>
               </div> */}
               <SidebarTrigger className='cursor-pointer' />
             </SidebarHeader>
-            <SidebarSeparator />
+            <SidebarSeparator className='my-4' />
             
             {/* Menu Section */}
-            <SidebarGroupContent className="mt-4">
+            <SidebarGroupContent>
               <SidebarMenu className='flex flex-col'>
                 {items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
-                      <Link href={item.url} className='flex items-center py-6'>
-                        <Button variant="ghost" className='px-0 cursor-pointer'>
-                        <item.icon className='size-5'/>
+                      <Link href={item.url} className='flex items-center py-6 group-data-[collapsible=icon]:!py-6'>
+                        <Button variant="ghost" className='px-1 cursor-pointer'>
+                          <item.icon className='size-5'/>
                         </Button>
                         <span>{item.title}</span>
                       </Link>

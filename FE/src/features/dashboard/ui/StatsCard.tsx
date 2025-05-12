@@ -43,7 +43,7 @@ export default function StatsCard({ data }: { data: DashboardData }) {
 
   return (
     <div className='p-6 bg-[#020817]/50 backdrop-blur-md rounded-xl border border-blue-900/20'>
-      <h3 className='text-md font-medium text-white mb-4'>{title}</h3>
+      <h3 className='text-lg font-semibold text-white mb-4'>{title}</h3>
       <div className='flex items-center justify-between'>
         <div className='flex-1'>
           <p className='text-4xl font-bold text-white'>{value}</p>
