@@ -14,13 +14,28 @@ const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
   const { state, amrId } = amrInfo;
   const color = AMR_STATE_COLORS[state] || '#9E9E9E';
   const { groupRef } = useAMRAnimation(amrInfo);
+  const { selectedAmrId, setSelectedAmrId } = useSelectedAMRStore();
+  const isSelected = selectedAmrId === amrId;
+
+  const handleClick = (event: React.MouseEvent) => {
+    event.stopPropagation(); // 상위로 이벤트 전파 방지
+    console.log('click', amrId);
+    setSelectedAmrId(amrId);
+  };
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} onClick={handleClick}>
+      {/* 선택된 AMR 주변 하이라이트 */}
+      {isSelected && (
+        <mesh position={[0, 0, 0]}>
+          <boxGeometry args={[1.6, 0.7, 1.2]} />
+          <meshBasicMaterial color='#00ff00' transparent opacity={0.2} />
+        </mesh>
+      )}
       {/* AMR 본체 - 방향에 맞게 길쭉한 형태로 변경 */}
       <mesh>
         <boxGeometry args={[1.2, 0.5, 0.8]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={isSelected ? '#00ff00' : color} />
       </mesh>
 
       {/* 방향 표시기 - 본체와 일치하도록 수정 */}
@@ -28,12 +43,12 @@ const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
         {/* 화살표 본체 */}
         <mesh>
           <boxGeometry args={[1, 0.1, 0.2]} />
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={isSelected ? '#00ff00' : color} />
         </mesh>
         {/* 화살표 머리 */}
         <mesh position={[0.6, 0, 0]}>
           <coneGeometry args={[0.3, 0.6, 4]} />
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={isSelected ? '#00ff00' : color} />
         </mesh>
       </group>
 
@@ -57,7 +72,10 @@ const Scene2DContent = () => {
   return (
     <>
       {models.map((amrInfo) => (
-        <AMR2DRenderer key={amrInfo.amrId} amrInfo={amrInfo} />
+        <AMR2DRenderer
+          key={amrInfo.amrId}
+          amrInfo={{ ...amrInfo, dir: amrInfo.dir - Math.PI / 2 }}
+        />
       ))}
       {/* 조명 설정 */}
       <ambientLight intensity={0.5} />

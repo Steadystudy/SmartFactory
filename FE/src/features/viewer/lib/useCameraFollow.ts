@@ -11,7 +11,7 @@ interface CameraFollowOptions {
 }
 
 export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
-  const { models } = useModelStore();
+  const { getSelectedModel } = useModelStore();
   const { selectedAmrId } = useSelectedAMRStore();
   const controlsRef = useRef<MapControlsImpl>(null);
   const initialRotationRef = useRef<THREE.Euler | null>(null);
@@ -32,9 +32,10 @@ export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
   }, []);
 
   useEffect(() => {
-    if (!selectedAmrId || !controlsRef.current || !initialRotationRef.current) return;
+    if (!controlsRef.current || !initialRotationRef.current) return;
 
-    const selectedAMR = models.find((model) => model.amrId === selectedAmrId);
+    const selectedAMR = getSelectedModel(selectedAmrId);
+
     if (selectedAMR) {
       const controls = controlsRef.current;
       const camera = controls.object;
@@ -81,7 +82,7 @@ export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
         },
       });
     }
-  }, [selectedAmrId, models, is2D]);
+  }, [selectedAmrId, getSelectedModel, is2D]);
 
   return { controlsRef };
 };
