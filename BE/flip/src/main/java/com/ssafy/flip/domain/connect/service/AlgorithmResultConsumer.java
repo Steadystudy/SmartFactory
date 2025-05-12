@@ -30,7 +30,7 @@ public class AlgorithmResultConsumer {
     private final ObjectMapper mapper;
     private final WebSocketService ws;
     private final StringRedisTemplate redis;
-    private final WebTriggerProducer webTrigger;
+    private final WebTriggerProducer webTriggerProducer;
     private final AmrJpaRepository amrJpaRepository;
     private final NodeJpaRepository nodeJpaRepository;
     private final StatusService statusService;
@@ -40,9 +40,11 @@ public class AlgorithmResultConsumer {
     @Getter
     private final Map<String, MissionResponse> delayedMissionMap = new ConcurrentHashMap<>();
 
+    private final Map<String, AmrMissionDTO> amrMissionList = new HashMap<>();
+
     @KafkaListener(topics = "algorithm-result", groupId = "flip-algorithm-group", concurrency = "4")
     public void applyResult(String msg) {
-        List<AmrMissionDTO> amrMissionList = new ArrayList<>();
+
 
         try {
             List<MissionResponse> responses = mapper.readValue(
@@ -54,16 +56,16 @@ public class AlgorithmResultConsumer {
                 MissionResponse now = split.get(0);
 
                 // 첫 미션 즉시 처리
-                processMission(now, amrMissionList);
+                processMission(now);
 
                 // 두 번째 미션은 해시맵에 저장
                 if (split.size() > 1) {
                     MissionResponse delayed = split.get(1);
                     delayedMissionMap.put(delayed.getAmrId(), delayed);
-                    log.info("🕓 미션 분할 저장: AMR={}, 미션ID={}", delayed.getAmrId(), delayed.getMissionId());
                 }
             }
 
+            sendWebTrigger();
 
         } catch (Exception e) {
             log.error("❗ 알고리즘 결과 처리 실패", e);
@@ -72,9 +74,8 @@ public class AlgorithmResultConsumer {
     }
 
     // ✅ 미션 즉시 실행 로직 (WebSocket 전송 포함)
-    public void processMission(MissionResponse res, List<AmrMissionDTO> amrMissionList) throws JsonProcessingException {
+    public void processMission(MissionResponse res) throws JsonProcessingException {
         String amrId = res.getAmrId();
-
         String key = "AMR_STATUS:" + amrId;
         redis.opsForHash().put(key, "missionId", String.valueOf(res.getMissionId()));
         redis.opsForHash().put(key, "missionType", String.valueOf(res.getMissionType()));
@@ -113,15 +114,16 @@ public class AlgorithmResultConsumer {
 
         statusService.updateSubmissionList(amrId, submissionList);
 
-        amrMissionList.add(new AmrMissionDTO(
-                amrId,
-                type,
-                startNode.getX(), startNode.getY(),
-                targetNode.getX(), targetNode.getY(),
+        amrMissionList.put(res.getAmrId(), new AmrMissionDTO(
+                res.getAmrId(),
+                res.getMissionType(),
+                startNode.getX(),
+                startNode.getY(),
+                targetNode.getX(),
+                targetNode.getY(),
                 res.getExpectedArrival(),
                 LocalDateTime.now()
         ));
-
     }
 
     // ✅ 미션 분할 로직
@@ -140,7 +142,7 @@ public class AlgorithmResultConsumer {
 
                 MissionResponse part1 = new MissionResponse(
                         res.getAmrId(),
-                        String.valueOf(r1.get(r1.size() - 1)),
+                        String.format("MISSION%03d", r1.get(r1.size() - 1)),
                         res.getMissionType(),
                         res.getExpectedArrival(),
                         r1
@@ -154,10 +156,17 @@ public class AlgorithmResultConsumer {
                         r2
                 );
 
+
                 return List.of(part1, part2);
             }
         }
 
         return List.of(res); // 분리 불가 → 단일 미션 유지
+    }
+
+    public void sendWebTrigger() throws JsonProcessingException {
+        String payload = mapper.writeValueAsString(amrMissionList.values().stream().toList());
+        log.info("✅ Web Trigger 전송: {}", payload);
+        webTriggerProducer.run(payload);
     }
 }
