@@ -241,18 +241,22 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
             // 2) 이전 노드 해제 → 대기열 있는 AMR에 퍼밋 전송
             Integer currNode = nodeId;
-            Integer prevNode = previousNodeMap.put(amrId, currNode);
 
-            if (prevNode != null && !prevNode.equals(currNode)
-                    && amrId.equals(nodeOccupants.get(prevNode))) {
-                nodeOccupants.remove(prevNode);
-                Queue<String> q = nodeQueues.get(prevNode);
+            if (amrId.equals(nodeOccupants.get(currNode))) {
+                // 1) 해당 노드 해제
+                nodeOccupants.remove(currNode);
+
+                // 2) 대기열에서 다음 AMR 꺼내 permit 전송
+                Queue<String> q = nodeQueues.get(currNode);
                 if (q != null && !q.isEmpty()) {
                     String nextAmr = q.poll();
-                    nodeOccupants.put(prevNode, nextAmr);
-                    int nextSub = lastSubmissionMap.get(nextAmr);
-                    String nextMission = lastMissionMap.get(nextAmr);
-                    sendTrafficPermit(nextAmr, nextMission, nextSub, prevNode, session);
+                    nodeOccupants.put(currNode, nextAmr);
+
+                    int nextSub     = lastSubmissionMap.get(nextAmr);
+                    String nextMis  = lastMissionMap.get(nextAmr);
+                    WebSocketSession nextSession = amrSessions.get(nextAmr);
+
+                    sendTrafficPermit(nextAmr, nextMis, nextSub, currNode, nextSession);
                 }
             }
 
