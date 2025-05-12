@@ -116,6 +116,10 @@ export default async function Home() {
 
       {/* Charts Section */}
       <div className='max-h-[480px] grid grid-cols-3 gap-4'>
+        <div className='lg:col-span-2'>
+          <OverviewChart {...chartData} />
+        </div>
+
         {/* Right Section */}
         <div className='flex flex-col justify-between'>
           {/* 3D View */}
