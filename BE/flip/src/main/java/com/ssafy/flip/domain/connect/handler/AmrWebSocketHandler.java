@@ -129,110 +129,120 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private void handleAmrState(Map<String, Object> json, WebSocketSession session) {
         try {
+            // — 공통 세션·DTO 변환 —
             Map<String, Object> body = (Map<String, Object>) json.get("body");
             String amrId = (String) body.get("amrId");
             amrSessions.put(amrId, session);
             webSocketService.registerSession(amrId, session);
 
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
+            String missionId      = amrDto.body().missionId();
+            int    currentSub     = amrDto.body().submissionId();
+            int    nodeId         = amrDto.body().currentNode();
+            int    edgeId         = amrDto.body().currentEdge();
+            int    state          = amrDto.body().state(); // 1=IDLE,2=BUSY
 
-            String missionId = amrDto.body().missionId();
-            int currentSubmission = amrDto.body().submissionId();
-            int nodeId = amrDto.body().currentNode();
-            int edgeId = amrDto.body().currentEdge();
-
-            //미션 수행 중이면 저장
-            if(missionId != null) {
-                lastMissionMap.put(amrId, missionId);
-            }
-            Integer lastSubmission = lastSubmissionMap.get(amrId);
-
-            //서브미션이 바뀌면 서브미션이 끝난 것이므로 routeTempMap에 임시 저장
-            if (lastSubmission != null && !lastSubmission.equals(currentSubmission)) {
-                LocalDateTime now = LocalDateTime.now();
-                routeTempMap.computeIfAbsent(amrId, k -> new ArrayList<>()).add(
-                        RouteTempDTO.builder()
+            // — 서브미션 변화 기록 —
+            LocalDateTime now = LocalDateTime.now();
+            Integer lastSub = lastSubmissionMap.get(amrId);
+            if (lastSub != null && !lastSub.equals(currentSub)) {
+                routeTempMap
+                        .computeIfAbsent(amrId, k -> new ArrayList<>())
+                        .add(RouteTempDTO.builder()
                                 .missionId(missionId)
-                                .submissionId(lastSubmission)
+                                .submissionId(lastSub)
                                 .nodeId(nodeId)
                                 .edgeId(edgeId)
                                 .startedAt(submissionStartMap.getOrDefault(amrId, now))
                                 .endedAt(now)
                                 .build()
-                );
+                        );
                 submissionStartMap.put(amrId, now);
-                lastSubmissionMap.put(amrId, currentSubmission);
-            } else if (lastSubmission == null) { //서브미션이 NULL이라면 미션 수행중이 아님
-                submissionStartMap.put(amrId, LocalDateTime.now());
-                lastSubmissionMap.put(amrId, currentSubmission);
+                lastSubmissionMap.put(amrId, currentSub);
+            } else if (lastSub == null) {
+                submissionStartMap.put(amrId, now);
+                lastSubmissionMap.put(amrId, currentSub);
             }
 
-            //미션이 끝났다면 state가 1이므로 저장된 routeTempMap이 있다면 db에 저장
-            if (amrDto.body().state() == 1) {
-                List<RouteTempDTO> routeTemps = routeTempMap.get(amrId);
-                if (routeTemps != null && !routeTemps.isEmpty()) {
-                    missionLogService.saveWithRoutes(amrId, missionId, routeTemps);
-                    routeTempMap.remove(amrId);
-                    submissionStartMap.remove(amrId);
-                    lastSubmissionMap.remove(amrId);
+            // — 수행 중인(Non-IDLE) 경우 마지막 미션 ID 저장 —
+            if (missionId != null) {
+                lastMissionMap.put(amrId, missionId);
+            }
 
-                    MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
-                    if (delayed != null) {
-                        List<AmrMissionDTO> delayedMissionList = new ArrayList<>();
-                        algorithmResultConsumer.processMission(delayed, new ArrayList<>());
-                        algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
-                        log.info("🚀 해시맵에서 지연 미션 꺼내 실행 완료: {}", amrId);
+            // — IDLE 전환 시 “미션 완료” 처리 —
+            List<RouteTempDTO> temps = routeTempMap.get(amrId);
+            if (state == 1 && temps != null && !temps.isEmpty()) {
+                log.info("🏁 AMR 미션 완료 감지: {} → {}", amrId, missionId);
 
-                        // payload 생성 후 실행
-                        String kafkaPayload = objectMapper.writeValueAsString(delayedMissionList);
-                        log.info("✅ 지연 미션 Web Trigger 전송: {}", kafkaPayload);
-                        webTriggerProducer.run(kafkaPayload);
-                    }
-                    else {
-                        /// 내가 추가해줘야하는곳 ( 미션이 끝나는곳)
-                        String kafkaPayload = objectMapper.writeValueAsString(amrDto);
-                        trigger.run(kafkaPayload);  // Kafka: algorithm-trigger, 메시지는 전체 AMR 상태
-                    }
+                // 1) DB에 미션 로그 저장
+                missionLogService.saveWithRoutes(amrId, missionId, temps);
+
+                // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
+                MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
+                if (delayed != null) {
+                    List<AmrMissionDTO> delayedList = new ArrayList<>();
+                    algorithmResultConsumer.processMission(delayed, delayedList);
+                    algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
+                    log.info("🚀 지연 미션 실행 완료: {}", amrId);
+
+                    String payload = objectMapper.writeValueAsString(delayedList);
+                    log.info("✅ Web Trigger 전송: {}", payload);
+                    webTriggerProducer.run(payload);
                 }
+                // 3) 아니면 일반 상태 트리거
+                else {
+                    String payload = objectMapper.writeValueAsString(amrDto);
+                    trigger.run(payload);
+                }
+
+                // 4) 임시 데이터 정리
+                routeTempMap.remove(amrId);
+                submissionStartMap.remove(amrId);
+                lastSubmissionMap.remove(amrId);
+                lastMissionMap.remove(amrId);
+
+                return;
             }
 
-            List<RouteTempDTO> temps = routeTempMap.getOrDefault(amrId, Collections.emptyList());
-            List<String> routeListJson = temps.stream()
-                    .map(dto -> {
+            // — IDLE이 아니면 상태 저장 & 트래픽 제어 계속 —
+            // 1) client에 넘길 route list JSON 생성
+            List<String> routeListJson = routeTempMap
+                    .getOrDefault(amrId, Collections.emptyList())
+                    .stream()
+                    .map(r -> {
                         Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("routeId",   dto.getSubmissionId());
-                        m.put("routeNode", dto.getNodeId());
-                        m.put("startAt",   dto.getStartedAt().format(fmt));
+                        m.put("routeId",   r.getSubmissionId());
+                        m.put("routeNode", r.getNodeId());
+                        m.put("startAt",   r.getStartedAt().format(fmt));
                         try {
                             return objectMapper.writeValueAsString(m);
                         } catch (JsonProcessingException e) {
-                            throw new RuntimeException("Route JSON 직렬화 실패", e);
+                            throw new RuntimeException(e);
                         }
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
             statusService.saveAmr(amrDto, routeListJson);
 
-            Integer currentNode = amrDto.body().currentNode();
-            Integer previousNode = previousNodeMap.put(amrId, currentNode);
+            // 2) 이전 노드 해제 → 대기열 있는 AMR에 퍼밋 전송
+            Integer currNode = nodeId;
+            Integer prevNode = previousNodeMap.put(amrId, currNode);
 
-            // 목적 노드가 바뀌면 대기하고 있던 다음 amr에 permit 보내줌
-            if (previousNode != null && !previousNode.equals(currentNode)) {
-                if (amrId.equals(nodeOccupants.get(previousNode))) {
-                    nodeOccupants.remove(previousNode);
-                    Queue<String> queue = nodeQueues.get(previousNode);
-                    if (queue != null && !queue.isEmpty()) {
-                        String nextAmrId = queue.poll();
-                        nodeOccupants.put(previousNode, nextAmrId);
-                        int nextSubmissionId = lastSubmissionMap.get(nextAmrId);
-                        String nextMissionId = lastMissionMap.get(nextAmrId);
-                        sendTrafficPermit(nextAmrId, nextMissionId, nextSubmissionId, previousNode, session);
-                    }
+            if (prevNode != null && !prevNode.equals(currNode)
+                    && amrId.equals(nodeOccupants.get(prevNode))) {
+                nodeOccupants.remove(prevNode);
+                Queue<String> q = nodeQueues.get(prevNode);
+                if (q != null && !q.isEmpty()) {
+                    String nextAmr = q.poll();
+                    nodeOccupants.put(prevNode, nextAmr);
+                    int nextSub = lastSubmissionMap.get(nextAmr);
+                    String nextMission = lastMissionMap.get(nextAmr);
+                    sendTrafficPermit(nextAmr, nextMission, nextSub, prevNode, session);
                 }
             }
-        } catch (Exception e) {
-            System.err.println("AMR_STATE 처리 실패: " + e.getMessage());
-            e.printStackTrace();
+
+        } catch (Exception ex) {
+            log.error("AMR_STATE 처리 실패", ex);
         }
     }
 
