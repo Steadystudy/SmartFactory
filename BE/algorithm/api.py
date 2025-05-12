@@ -61,8 +61,6 @@ def mapInit():
         mission_rows = cursor.fetchall()
         for row in mission_rows:
             missions[row['target_node_id']] = row['mission_type']
-            
-        print(missions)
 
     # ④ 그래프 생성
     for edge in edges:
