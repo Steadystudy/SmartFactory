@@ -62,7 +62,19 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                 .map(status -> {
                     String rawAmrId = status.getAmrId();
                     String amrId = rawAmrId.startsWith("AMR_STATUS:") ? rawAmrId.substring("AMR_STATUS:".length()) : rawAmrId;
+                    System.out.println("MISSION: AMR ID = "+amrId);
                     AmrMissionDTO missionDTO = amrMissionMap.get(amrId);
+                    if(missionDTO == null){
+                        missionDTO = new AmrMissionDTO(
+                                amrId,
+                                status.getType(),
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                LocalDateTime.now());
+                    }
                     return AmrMissionResponseDTO.from(status, missionDTO);
                 })
                 .toList();

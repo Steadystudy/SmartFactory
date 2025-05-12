@@ -1,7 +1,7 @@
 'use client';
 
 import { useFrame, useThree } from '@react-three/fiber';
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect } from 'react';
 import { Model3DProps } from '../model/types';
 import * as THREE from 'three';
 import { damp3, dampE } from 'maath/easing';
@@ -44,18 +44,6 @@ export const BaseModel3D = ({
     onClick?.();
   };
 
-  // 각 인스턴스마다 새로운 scene 클론 생성
-  const instance = useMemo(() => {
-    const clonedScene = scene.clone();
-    // material도 클론하여 독립적으로 관리
-    clonedScene.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.material = child.material.clone();
-      }
-    });
-    return clonedScene;
-  }, [scene]);
-
   const modelRef = useRef<THREE.Group>(null);
 
   // 현재 위치와 회전 상태 관리
@@ -95,7 +83,7 @@ export const BaseModel3D = ({
 
   // hover 효과 적용
   useEffect(() => {
-    instance.traverse((child) => {
+    scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         if (selectedAmrId === modelId) {
           child.material.emissive = new THREE.Color(0x0000ff);
@@ -108,12 +96,12 @@ export const BaseModel3D = ({
         }
       }
     });
-  }, [selectedAmrId, instance, modelId]);
+  }, [selectedAmrId, modelId]);
 
   return (
     <primitive
       ref={modelRef}
-      object={instance}
+      object={scene}
       scale={scale}
       className='cursor-pointer'
       onClick={handleClick}
