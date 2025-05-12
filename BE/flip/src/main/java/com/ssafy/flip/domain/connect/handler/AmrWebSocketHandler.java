@@ -2,10 +2,14 @@ package com.ssafy.flip.domain.connect.handler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.flip.domain.connect.dto.request.AmrMissionDTO;
 import com.ssafy.flip.domain.connect.dto.request.RouteTempDTO;
+import com.ssafy.flip.domain.connect.service.AlgorithmResultConsumer;
 import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
 import com.ssafy.flip.domain.connect.service.WebSocketService;
+import com.ssafy.flip.domain.connect.service.WebTriggerProducer;
 import com.ssafy.flip.domain.log.service.mission.MissionLogService;
+import com.ssafy.flip.domain.mission.dto.MissionResponse;
 import com.ssafy.flip.domain.status.dto.request.AmrSaveRequestDTO;
 import com.ssafy.flip.domain.status.dto.request.MissionRequestDto;
 import com.ssafy.flip.domain.status.service.StatusService;
@@ -49,6 +53,8 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private static final DateTimeFormatter fmt =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
+    private final AlgorithmResultConsumer algorithmResultConsumer;
+    private final WebTriggerProducer webTriggerProducer;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -69,7 +75,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String payload = message.getPayload();
-        System.out.println(payload);
         Map<String, Object> jsonMap = objectMapper.readValue(payload, Map.class);
         Map<String, Object> header = (Map<String, Object>) jsonMap.get("header");
         String msgName = (String) header.get("msgName");
@@ -127,8 +132,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             Map<String, Object> body = (Map<String, Object>) json.get("body");
             String amrId = (String) body.get("amrId");
             amrSessions.put(amrId, session);
-
-            log.info("✅ WebSocket 세션 등록됨: {}", amrId);
             webSocketService.registerSession(amrId, session);
 
             AmrSaveRequestDTO amrDto = objectMapper.convertValue(json, AmrSaveRequestDTO.class);
@@ -173,9 +176,23 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     submissionStartMap.remove(amrId);
                     lastSubmissionMap.remove(amrId);
 
-                    /// 내가 추가해줘야하는곳 ( 미션이 끝나는곳)
-                    String kafkaPayload = objectMapper.writeValueAsString(amrDto);
-                    trigger.run(kafkaPayload);  // Kafka: algorithm-trigger, 메시지는 전체 AMR 상태
+                    MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
+                    if (delayed != null) {
+                        List<AmrMissionDTO> delayedMissionList = new ArrayList<>();
+                        algorithmResultConsumer.processMission(delayed, new ArrayList<>());
+                        algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
+                        log.info("🚀 해시맵에서 지연 미션 꺼내 실행 완료: {}", amrId);
+
+                        // payload 생성 후 실행
+                        String kafkaPayload = objectMapper.writeValueAsString(delayedMissionList);
+                        log.info("✅ 지연 미션 Web Trigger 전송: {}", kafkaPayload);
+                        webTriggerProducer.run(kafkaPayload);
+                    }
+                    else {
+                        /// 내가 추가해줘야하는곳 ( 미션이 끝나는곳)
+                        String kafkaPayload = objectMapper.writeValueAsString(amrDto);
+                        trigger.run(kafkaPayload);  // Kafka: algorithm-trigger, 메시지는 전체 AMR 상태
+                    }
                 }
             }
 

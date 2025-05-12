@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 컨테이너 실행 시 실행할 명령
-CMD ["python", "test.py"]
+CMD ["python", "AlgorithmServer.py"]

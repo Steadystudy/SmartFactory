@@ -41,7 +41,6 @@ public class WebSocketServiceImpl implements WebSocketService {
     @Override
     public void registerSession(String amrId, WebSocketSession session) {
         amrSessions.put(amrId, session);
-        log.info("✅ WebSocket 세션 등록됨: {}", amrId);
     }
 
     @Override
@@ -120,6 +119,13 @@ public class WebSocketServiceImpl implements WebSocketService {
                 String edgeKey = node1 + "-" + node2;
 
                 String edgeId = edgeService.getEdgeKeyToIdMap().getOrDefault(edgeKey, "UNKNOWN");
+
+                if ("UNKNOWN".equals(edgeId)) {
+                    log.error("❗ 존재하지 않는 edgeKey: {}", edgeKey);
+                    // 예외를 던지거나 기본값으로 처리
+                    throw new IllegalArgumentException("Invalid edgeKey: " + edgeKey);
+                }
+
 
                 submissions.add(new MissionAssignDTO.SubmissionDTO(
                         String.valueOf(i),
