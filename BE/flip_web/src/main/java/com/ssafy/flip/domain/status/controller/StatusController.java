@@ -52,7 +52,7 @@ public class StatusController {
     @Operation(summary = "line status", description = "라인 상태")
     @GetMapping("/line")
     public ResponseEntity<LineStatusResponseDTO> getLineStatus(){
-        return ResponseEntity.ok(new LineStatusResponseDTO(1L, 10, true, LocalDateTime.now()));
+        return ResponseEntity.ok(null);
     }
 
     @Operation(summary = "factory status", description = "공장 현재 상태 확인")

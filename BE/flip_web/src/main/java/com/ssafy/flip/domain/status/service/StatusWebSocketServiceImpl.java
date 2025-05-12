@@ -1,11 +1,14 @@
 package com.ssafy.flip.domain.status.service;
 
+import com.ssafy.flip.domain.line.entity.Line;
 import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.status.dto.request.*;
 import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
+import com.ssafy.flip.domain.status.entity.LineStatusRedis;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
+import com.ssafy.flip.domain.status.repository.LineStatusRedisManualRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -14,10 +17,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.time.LocalDateTime;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +26,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisManualRepository amrStatusRedisManualRepository;
+    private final LineStatusRedisManualRepository lineStatusRedisManualRepository;
     private final LineService lineService;
     private final MissionService missionService;
 
@@ -69,11 +71,31 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
     }
 
     @Override
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedRate = 3000)
     public void pushLineStatus() {
-        List<LineStatusResponseDTO> lineStatusResponseDTOSs = lineService.findAll().stream()
-            .map(LineStatusResponseDTO::from)
-            .toList();
-        messagingTemplate.convertAndSend("/amr/line", lineStatusResponseDTOSs);
+        Map<LineStatusRedis, Integer> lineAmountMap = calculateAmount();
+
+        LineStatusResponseDTO responseDTO = LineStatusResponseDTO.from(lineAmountMap);
+        messagingTemplate.convertAndSend("/amr/line", responseDTO);
+    }
+
+    private Map<LineStatusRedis, Integer> calculateAmount() {
+        List<LineStatusRedis> lineList = lineStatusRedisManualRepository.findAllLineStatus();
+        Map<LineStatusRedis, Integer> amountMap = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+        int maxAmount = 100;
+
+        for(LineStatusRedis lineStatusRedis : lineList){
+            long elapsedSeconds = java.time.Duration.between(lineStatusRedis.getLastInputTime(), now).getSeconds();
+            float cycleTime = lineStatusRedis.getCycleTime() * 10;
+
+            double ratio = (double) elapsedSeconds / cycleTime;
+            int amount = 0;
+            if(ratio > 0) {
+                amount = (int) Math.min(maxAmount, Math.floor((1 - ratio) * maxAmount));
+            }
+            amountMap.put(lineStatusRedis, amount);
+        }
+        return amountMap;
     }
 }

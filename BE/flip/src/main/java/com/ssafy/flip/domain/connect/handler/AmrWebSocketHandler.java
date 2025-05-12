@@ -8,11 +8,15 @@ import com.ssafy.flip.domain.connect.service.AlgorithmResultConsumer;
 import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
 import com.ssafy.flip.domain.connect.service.WebSocketService;
 import com.ssafy.flip.domain.connect.service.WebTriggerProducer;
+import com.ssafy.flip.domain.line.entity.Line;
+import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.log.service.mission.MissionLogService;
 import com.ssafy.flip.domain.mission.dto.MissionResponse;
 import com.ssafy.flip.domain.status.dto.request.AmrSaveRequestDTO;
+import com.ssafy.flip.domain.status.dto.request.LineSaveRequestDTO;
 import com.ssafy.flip.domain.status.dto.request.MissionRequestDto;
 import com.ssafy.flip.domain.status.service.StatusService;
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +44,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final WebSocketService webSocketService;
     private final StatusService statusService;
     private final MissionLogService missionLogService;
+    private final LineService lineService;
     private final AlgorithmTriggerProducer trigger;   // ← Kafka로 트리거
 
     private final Map<String, Integer> lastSubmissionMap = new ConcurrentHashMap<>();
@@ -51,10 +56,20 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, String> lastMissionMap = new ConcurrentHashMap<>();
     private final Map<String, Integer> previousNodeMap = new ConcurrentHashMap<>();
 
+    private final Map<String, Long> missionToLineId = new HashMap<>();
+
     private static final DateTimeFormatter fmt =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
     private final AlgorithmResultConsumer algorithmResultConsumer;
     private final WebTriggerProducer webTriggerProducer;
+
+    @PostConstruct
+    public void initMissionMapping() {
+        for(int i = 11; i <= 20; i++){
+            String missionId = "MISSION0"+i;
+            missionToLineId.put(missionId, (long) i);
+        }
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
