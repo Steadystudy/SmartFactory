@@ -352,9 +352,9 @@ class AMR:
 
         # 공통 초기화
         # self.current_mission_id = None
-        self.current_mission_type = None
+        # self.current_mission_type = None
         self.current_submission_id = None
-        self.current_edge_id = None
+        # self.current_edge_id = None
         self.current_speed = 0
         self.update_status()
 
