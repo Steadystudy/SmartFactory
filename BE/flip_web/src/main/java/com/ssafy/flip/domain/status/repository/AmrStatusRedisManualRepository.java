@@ -18,8 +18,11 @@ public class AmrStatusRedisManualRepository {
         if (keys.isEmpty()) return Collections.emptyList();
 
         return keys.stream()
-                .map(key -> redisTemplate.opsForHash().entries(key))
-                .map(this::convertMapToAmrStatusRedis)
+                .map(key -> {
+                    Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
+                    String amrId = key.replace("AMR_STATUS:", "");
+                    return convertMapToAmrStatusRedis(map, amrId);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -30,12 +33,12 @@ public class AmrStatusRedisManualRepository {
         Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
         if (map.isEmpty()) return Optional.empty();
 
-        return Optional.of(convertMapToAmrStatusRedis(map));
+        return Optional.of(convertMapToAmrStatusRedis(map, amrId));
     }
 
-    private AmrStatusRedis convertMapToAmrStatusRedis(Map<Object, Object> map) {
+    private AmrStatusRedis convertMapToAmrStatusRedis(Map<Object, Object> map, String amrId) {
         return AmrStatusRedis.builder()
-                .amrId((String) map.get("amrId"))
+                .amrId(amrId)
                 .x(Float.parseFloat((String) map.get("x")))
                 .y(Float.parseFloat((String) map.get("y")))
                 .direction(Float.parseFloat((String) map.getOrDefault("direction", "0")))

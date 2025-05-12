@@ -63,7 +63,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private static final DateTimeFormatter fmt =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
     private final AlgorithmResultConsumer algorithmResultConsumer;
-    private final WebTriggerProducer webTriggerProducer;
 
     private final Map<Integer, Object>  nodeLocks     = new ConcurrentHashMap<>();
 
@@ -204,14 +203,11 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
                 MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
                 if (delayed != null) {
-                    List<AmrMissionDTO> delayedList = new ArrayList<>();
-                    algorithmResultConsumer.processMission(delayed, delayedList);
+                    algorithmResultConsumer.processMission(delayed);
                     algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
                     log.info("🚀 지연 미션 실행 완료: {}", amrId);
 
-                    String payload = objectMapper.writeValueAsString(delayedList);
-                    log.info("✅ Web Trigger 전송: {}", payload);
-                    webTriggerProducer.run(payload);
+                    algorithmResultConsumer.sendWebTrigger();
                 }
                 // 3) 아니면 일반 상태 트리거
                 else {
