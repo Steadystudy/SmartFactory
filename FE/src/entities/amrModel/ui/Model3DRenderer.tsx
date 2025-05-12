@@ -9,14 +9,13 @@ const ANIMATION_SETTINGS = {
 
 export const Model3DRenderer = () => {
   const { models } = useModelStore();
-
   return (
     <>
-      {models?.map((amrInfo, index) => {
+      {models?.map((amrInfo) => {
         const position: [number, number, number] = [
-          amrInfo.locationX + 0.35,
+          amrInfo.locationX,
           ANIMATION_SETTINGS.height,
-          amrInfo.locationY - 0.6,
+          amrInfo.locationY,
         ];
         const rotation: [number, number, number] = [0, amrInfo.dir, 0];
         switch (amrInfo.type) {
@@ -45,7 +44,7 @@ export const Model3DRenderer = () => {
                 key={amrInfo.amrId}
                 position={position}
                 rotation={rotation}
-                loading={index % 2 === 0 ? true : false}
+                loading={amrInfo.loading}
                 modelId={amrInfo.amrId}
               />
             );
