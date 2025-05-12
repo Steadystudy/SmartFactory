@@ -15,7 +15,7 @@ public class AmrStatusRedisManualRepository {
 
     public List<AmrStatusRedis> findAllAmrStatus() {
         Set<String> keys = redisTemplate.keys("AMR_STATUS:*");
-        if (keys == null || keys.isEmpty()) return Collections.emptyList();
+        if (keys.isEmpty()) return Collections.emptyList();
 
         return keys.stream()
                 .map(key -> redisTemplate.opsForHash().entries(key))
@@ -28,7 +28,7 @@ public class AmrStatusRedisManualRepository {
         if (!Boolean.TRUE.equals(redisTemplate.hasKey(key))) return Optional.empty();
 
         Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
-        if (map == null || map.isEmpty()) return Optional.empty();
+        if (map.isEmpty()) return Optional.empty();
 
         return Optional.of(convertMapToAmrStatusRedis(map));
     }

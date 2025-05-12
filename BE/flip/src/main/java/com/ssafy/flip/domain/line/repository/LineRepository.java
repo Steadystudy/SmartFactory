@@ -1,17 +1,14 @@
-package com.ssafy.flip.domain.line.service;
+package com.ssafy.flip.domain.line.repository;
 
 import com.ssafy.flip.domain.line.entity.Line;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface LineService {
+public interface LineRepository {
 
     List<Line> findAll();
 
     Optional<Line> findById(Long id);
-
-    Line getLine(Long id);
 
 }
