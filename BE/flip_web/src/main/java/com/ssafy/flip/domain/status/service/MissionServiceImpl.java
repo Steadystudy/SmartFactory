@@ -19,10 +19,9 @@ public class MissionServiceImpl implements MissionService {
     }
 
     public Map<String, AmrMissionDTO> setAmrMission(List<AmrMissionDTO> missionDTOList) {
-        for (AmrMissionDTO dto : missionDTOList) {
-            amrMissionDTOS.put(dto.amrId(), dto);
+        for(AmrMissionDTO amrMissionDTO : missionDTOList) {
+            amrMissionDTOS.put(amrMissionDTO.amrId(), amrMissionDTO);
         }
-
         return amrMissionDTOS;
     }
 }
