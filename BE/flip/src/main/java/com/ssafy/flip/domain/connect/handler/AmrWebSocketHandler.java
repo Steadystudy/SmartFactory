@@ -2,6 +2,7 @@ package com.ssafy.flip.domain.connect.handler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ssafy.flip.domain.connect.dto.request.AmrMissionDTO;
 import com.ssafy.flip.domain.connect.dto.request.RouteTempDTO;
 import com.ssafy.flip.domain.connect.service.AlgorithmResultConsumer;
@@ -30,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
 
 @Component
@@ -63,6 +65,13 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final AlgorithmResultConsumer algorithmResultConsumer;
     private final WebTriggerProducer webTriggerProducer;
 
+    private final Map<Integer, Object>  nodeLocks     = new ConcurrentHashMap<>();
+
+    @PostConstruct
+    public void initObjectMapper() {
+        objectMapper.registerModule(new JavaTimeModule());
+    }
+    
     @PostConstruct
     public void initMissionMapping() {
         for(int i = 11; i <= 20; i++){
@@ -187,7 +196,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             // — IDLE 전환 시 “미션 완료” 처리 —
             List<RouteTempDTO> temps = routeTempMap.get(amrId);
             if (state == 1 && temps != null && !temps.isEmpty()) {
-                log.info("🏁 AMR 미션 완료 감지: {} → {}", amrId, missionId);
+                log.info("🏁 AMR 미션 완료 감지: {} → {} {}", amrId, missionId, temps);
 
                 // 1) DB에 미션 로그 저장
                 missionLogService.saveWithRoutes(amrId, missionId, temps);
@@ -245,17 +254,26 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
             if (prevNode != null && !prevNode.equals(currNode)
                     && amrId.equals(nodeOccupants.get(prevNode))) {
-                nodeOccupants.remove(prevNode);
-                Queue<String> q = nodeQueues.get(prevNode);
-                if (q != null && !q.isEmpty()) {
-                    String nextAmr = q.poll();
-                    nodeOccupants.put(prevNode, nextAmr);
-                    int nextSub = lastSubmissionMap.get(nextAmr);
-                    String nextMission = lastMissionMap.get(nextAmr);
-                    sendTrafficPermit(nextAmr, nextMission, nextSub, prevNode, session);
+
+                Object lock = nodeLocks.computeIfAbsent(prevNode, k -> new Object());
+                synchronized(lock) {
+                    // 1) 점유 해제
+                    nodeOccupants.remove(prevNode);
+
+                    // 2) 대기열에서 다음 AMR 꺼내기
+                    Queue<String> q = nodeQueues.get(prevNode);
+                    if (q != null && !q.isEmpty()) {
+                        String nextAmr = q.poll();
+                        nodeOccupants.put(prevNode, nextAmr);
+
+                        // 3) 해당 AMR의 실제 세션을 꺼내서 퍼밋 전송
+                        WebSocketSession nextSession = amrSessions.get(nextAmr);
+                        int nextSub    = lastSubmissionMap.get(nextAmr);
+                        String nextMis = lastMissionMap.get(nextAmr);
+                        sendTrafficPermit(nextAmr, nextMis, nextSub, prevNode, nextSession);
+                    }
                 }
             }
-
         } catch (Exception ex) {
             log.error("AMR_STATE 처리 실패", ex);
         }
@@ -275,7 +293,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
         // 기존 로직 그대로
         System.out.println("🚥 TRAFFIC_REQ 수신: " + amrId + " → 노드 " + nodeId);
-        nodeQueues.computeIfAbsent(nodeId, k -> new LinkedList<>());
+        nodeQueues.computeIfAbsent(nodeId, k -> new ConcurrentLinkedQueue<>());
 
         String currentOccupant = nodeOccupants.get(nodeId);
         if (currentOccupant == null) {
