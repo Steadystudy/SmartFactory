@@ -8,14 +8,14 @@ export default async function Home() {
   // API 응답 데이터를 카드 데이터 형식으로 변환
   const cardData = [
     {
-      title: 'AMR 가동 갯수',
+      title: 'AMR 운행 현황',
       value: `${statsData.amrWorking}대`,
       subtext: [`/ 총 ${statsData.amrMaxNum}대`],
       data: {
         current: statsData.amrWorking,
         total: statsData.amrMaxNum,
         status: [
-          { label: '작동 중', value: statsData.amrWorking, total: statsData.amrMaxNum },
+          { label: '운행 중', value: statsData.amrWorking, total: statsData.amrMaxNum },
           { label: '대기 중', value: statsData.amrWaiting, total: statsData.amrMaxNum },
           { label: '충전 중', value: statsData.amrCharging, total: statsData.amrMaxNum },
           { label: '에러', value: statsData.amrError, total: statsData.amrMaxNum },
@@ -23,21 +23,21 @@ export default async function Home() {
       },
     },
     {
-      title: 'AMR 평균 가동률',
-      value: `${Math.floor((statsData.amrWorkTime / 480) * 100)}%`,
+      title: 'AMR 평균 운행률',
+      value: `${Math.round((statsData.amrWorkTime / 480) * 100)}%`,
       subtext: [`${Math.floor(statsData.amrWorkTime / 60)}h ${statsData.amrWorkTime % 60}m / 8h`],
       data: {
         current: (statsData.amrWorkTime / 480) * 100,
         total: 100,
         status: [
           {
-            label: '가동 시간',
+            label: '운행 시간',
             value: (statsData.amrWorkTime / 480) * 100,
             isTime: true,
             timeValue: statsData.amrWorkTime,
           },
           {
-            label: '미가동 시간',
+            label: '미운행 시간',
             value: 100 - (statsData.amrWorkTime / 480) * 100,
             isTime: true,
             timeValue: 480 - statsData.amrWorkTime,
@@ -46,20 +46,20 @@ export default async function Home() {
       },
     },
     {
-      title: '창고 내 자재 상태',
+      title: '자재 보유 현황',
       value: `${Math.floor((statsData.storageQuantity / statsData.storageMaxQuantity) * 100)}%`,
-      subtext: [`${statsData.storageQuantity}개 / ${statsData.storageMaxQuantity}개`],
+      subtext: [`${statsData.storageQuantity.toLocaleString()}개 / ${statsData.storageMaxQuantity.toLocaleString()}개`],
       data: {
         current: statsData.storageQuantity,
         total: statsData.storageMaxQuantity,
         status: [
           {
-            label: '자재 보유량',
+            label: '보유량',
             value: statsData.storageQuantity,
             storageTotal: statsData.storageMaxQuantity,
           },
           {
-            label: '남은 수용량',
+            label: '잔여 수용량',
             value: statsData.storageMaxQuantity - statsData.storageQuantity,
             storageTotal: statsData.storageMaxQuantity,
           },
@@ -69,13 +69,14 @@ export default async function Home() {
     {
       title: '설비 가동 상태',
       value: `${statsData.lineWorking}개`,
-      subtext: ['/총 20개'],
+      // subtext: ['/총 20개'],
+      subtext: [`/총 ${statsData.lineMaxNum}개`],
       data: {
         current: statsData.lineWorking,
-        total: 20,
+        total: statsData.lineMaxNum,
         status: [
-          { label: '가동 중', value: statsData.lineWorking, total: 20 },
-          { label: '미가동', value: 20 - statsData.lineWorking, total: 20 },
+          { label: '가동 중', value: statsData.lineWorking, total: statsData.lineMaxNum },
+          { label: '미가동', value: statsData.lineMaxNum - statsData.lineWorking, total: statsData.lineMaxNum },
         ],
       },
     },
@@ -116,26 +117,18 @@ export default async function Home() {
       </div>
 
       {/* Charts Section */}
-      <div className='max-h-[480px] grid grid-cols-3 gap-4'>
-        <div className='col-span-2'>
+      <div className='max-h-[450px] grid grid-cols-3 gap-6'>
+        <div className='col-span-2 h-full'>
           <OverviewChart {...chartData} />
         </div>
 
         {/* Right Section */}
-        <div className='flex flex-col justify-between'>
-          {/* 3D View */}
-          <div className='p-4 bg-[#020817]/50 backdrop-blur-md rounded-xl border border-blue-900/20'>
-            <h2 className='mb-2 font-semibold text-white text-md'>3D 공장 뷰</h2>
-            <div className='bg-[#1F2937] h-[180px] rounded-lg flex items-center justify-center'>
-              <span className='text-gray-400'>3D 화면 썸네일</span>
-            </div>
-          </div>
-
-          {/* 2D View */}
-          <div className='p-4 bg-[#020817]/50 backdrop-blur-md rounded-xl border border-blue-900/20'>
-            <h2 className='mb-2 font-semibold text-white text-md'>2D 공장 뷰</h2>
-            <div className='bg-[#1F2937] h-[180px] rounded-lg flex items-center justify-center'>
-              <span className='text-gray-400'>2D 화면 썸네일</span>
+        <div className='h-full'>
+          {/* Map View */}
+          <div className='h-full p-6 bg-[#020817]/50 backdrop-blur-md rounded-xl border border-blue-900/20'>
+            <h2 className='mb-3 font-semibold text-white text-lg'>공장 지도</h2>
+            <div className='bg-[#1F2937] h-[90%] rounded-lg flex items-center justify-center'>
+              <span className='text-gray-400'>지도 화면 썸네일</span>
             </div>
           </div>
         </div>
