@@ -322,6 +322,7 @@ class AMR:
         self.current_mission_id = mission["missionId"]
         self.current_mission_type = mission["missionType"]
         self.update_status()
+        prev = self.map_data["nodes"][str(self.current_node_id)]
 
         aborted = False
         for sub in mission["submissions"]:
@@ -339,7 +340,8 @@ class AMR:
             edge = self.map_data["edges"][str(sub["edgeId"])]
             self.current_speed = edge["speed"]
 
-            yield from self.move_to_node(node, edge)
+            yield from self.move_to_node(node, edge, prev)
+            prev = node
 
         # ─── 완료/중단 후 초기화 ─────────────────────────────────────────
         self.state = 1
@@ -354,11 +356,11 @@ class AMR:
         # self.current_mission_id = None
         self.current_mission_type = None
         self.current_submission_id = None
-        self.current_edge_id = None
+        # self.current_edge_id = None
         self.current_speed = 0
         self.update_status()
 
-    def move_to_node(self, node, edge):
+    def move_to_node(self, node, edge, prev):
         distance = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
         speed = edge["speed"]
         duration = distance / speed
@@ -385,7 +387,10 @@ class AMR:
             self.update_status()
 
         self.dir = target_dir
+        self.current_node_id = prev["id"]
         self.update_status()
+
+
 
         # 2. TRAFFIC_REQ 요청
         self.traffic_event.clear()
@@ -431,7 +436,7 @@ class AMR:
         # 4. 위치 정렬
         self.pos_x = node["x"]
         self.pos_y = node["y"]
-        self.current_node_id = node["id"]
+        # self.current_node_id = node["id"]
         self.update_status()
 
         # 5. 노드 방향 회전 처리 (charging, docking 등)
@@ -541,7 +546,7 @@ def broadcast_status():
 
                     if i < len(ws_clients):
                         try:
-                            print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
+                            # print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
                             ws_clients[i].send(json.dumps(message))
                         except Exception as e:
                             print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
