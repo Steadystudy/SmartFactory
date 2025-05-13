@@ -41,14 +41,17 @@ def fetch_line_status() -> list[tuple[int, float]]:
         key = f"MISSION_PT:{node}"
         if r.exists(key):
             ts_str = r.get(key)
-            try:
-                ts = datetime.fromisoformat(ts_str)
-                elapsed = (now - ts).total_seconds()
-                if 11<=node<=20 or 31<=node<=40:
-                    elapsed += api.loadingTimeTable[(node-1)%10+1][node]
-                line_status.append((node, elapsed))
-            except Exception as e:
-                print(f"⚠️ {key} 값 변환 실패: {ts_str} ({e})")
+            if ts_str==-1:
+                continue
+            else:
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                    elapsed = (now - ts).total_seconds()
+                    if 11<=node<=20 or 31<=node<=40:
+                        elapsed += api.loadingTimeTable[(node-1)%10+1][node]
+                    line_status.append((node, elapsed))
+                except Exception as e:
+                    print(f"⚠️ {key} 값 변환 실패: {ts_str} ({e})")
     return line_status
 
 
