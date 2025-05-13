@@ -18,6 +18,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -67,7 +68,8 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private final Map<String, Integer> missionToLine = new HashMap<>();
     private final LineService lineService;
-    
+    private final StringRedisTemplate stringRedisTemplate;
+
     @PostConstruct
     public void initObjectMapper() {
         objectMapper.registerModule(new JavaTimeModule());
@@ -225,15 +227,21 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 else {
                     lineService.markMissionBlockedNow(missionId);
                     String payload = objectMapper.writeValueAsString(amrDto);
+
+                    // missionType을 UNLOADING으로 덮어쓰기
+                    String amrKey = "AMR_STATUS:" + amrDto.body().amrId();
+                    stringRedisTemplate.opsForHash().put(amrKey, "missionType", "UNLOADING");
+
                     trigger.run(payload);
 
-                    if(missionToLine.containsKey(missionId)) {
+                    if (missionToLine.containsKey(missionId)) {
                         statusService.saveLine(new LineSaveRequestDTO(
                                 missionToLine.get(missionId),
                                 25.0F,
                                 true));
                     }
                 }
+
 
                 // 4) 임시 데이터 정리
                 routeTempMap.remove(amrId);
