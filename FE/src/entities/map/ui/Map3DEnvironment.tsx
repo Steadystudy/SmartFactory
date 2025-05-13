@@ -23,9 +23,6 @@ export const Map3D = () => {
         scale={1}
         position={[65.5, 8, 9]}
         rotation={[0, 0, 0]}
-        // onClick={(e) => {
-        //   console.log(e.eventObject);
-        // }}
       />
 
       <axesHelper args={[100]} />

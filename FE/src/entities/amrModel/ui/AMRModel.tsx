@@ -6,17 +6,12 @@ import { useAnimations, useGLTF } from '@react-three/drei';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
-const animationNames = {
-  Material_load: 'Material_load',
-  Material_Unload: 'Material_Unload',
-  Box_load: 'Box_load',
-  Box_Unload: 'Box_Unload',
-};
-
 export const AMRModel = (props: Omit<Model3DProps, 'scene'>) => {
   const { scene, animations } = useGLTF('/SSF-150.glb');
   const { actions } = useAnimations(animations, scene);
-  const { loading } = props;
+  const {
+    amrState: { loading, amrId },
+  } = props;
   // 각 인스턴스마다 새로운 scene 클론 생성
   const instance = useMemo(() => {
     const clonedScene = scene.clone();
@@ -35,11 +30,11 @@ export const AMRModel = (props: Omit<Model3DProps, 'scene'>) => {
     });
 
     if (loading) {
-      console.log('Box_load 애니메이션 실행');
-      actions[animationNames.Box_load]?.reset().play();
+      console.log(amrId, 'SSF-150 Load 애니메이션 실행');
+      actions['SSF-150 Load']?.reset().play();
     } else {
-      console.log('Box_Unload 애니메이션 실행');
-      actions[animationNames.Box_Unload]?.reset().play();
+      console.log(amrId, 'SSF-150 Unload 애니메이션 실행');
+      actions['SSF-150 Unload']?.reset().play();
     }
   }, [loading, actions]);
 
