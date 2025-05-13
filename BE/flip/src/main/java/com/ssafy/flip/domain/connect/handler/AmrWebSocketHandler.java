@@ -3,24 +3,20 @@ package com.ssafy.flip.domain.connect.handler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.ssafy.flip.domain.connect.dto.request.AmrMissionDTO;
 import com.ssafy.flip.domain.connect.dto.request.RouteTempDTO;
 import com.ssafy.flip.domain.connect.service.AlgorithmResultConsumer;
 import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
 import com.ssafy.flip.domain.connect.service.WebSocketService;
-import com.ssafy.flip.domain.connect.service.WebTriggerProducer;
-import com.ssafy.flip.domain.line.entity.Line;
 import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.log.service.mission.MissionLogService;
 import com.ssafy.flip.domain.mission.dto.MissionResponse;
 import com.ssafy.flip.domain.status.dto.request.AmrSaveRequestDTO;
-import com.ssafy.flip.domain.status.dto.request.LineSaveRequestDTO;
-import com.ssafy.flip.domain.status.dto.request.MissionRequestDto;
 import com.ssafy.flip.domain.status.service.StatusService;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -32,7 +28,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -66,6 +61,8 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private final Map<Integer, Object>  nodeLocks     = new ConcurrentHashMap<>();
 
+    private final ThreadPoolTaskExecutor amrTaskExecutor;
+
     @PostConstruct
     public void initObjectMapper() {
         objectMapper.registerModule(new JavaTimeModule());
@@ -96,25 +93,31 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String payload = message.getPayload();
-        Map<String, Object> jsonMap = objectMapper.readValue(payload, Map.class);
-        Map<String, Object> header = (Map<String, Object>) jsonMap.get("header");
-        String msgName = (String) header.get("msgName");
-
-        switch (msgName) {
-            case "AMR_STATE":
-                handleAmrState(jsonMap, session);
-                break;
-            case "TRAFFIC_REQ":
-                handleTrafficRequest(jsonMap, session);
-                break;
-            case "SIMULATION_START":
-                handleStimulatorStart();
-                break;
-            default:
-                System.out.println("Unknown message: " + msgName);
-        }
+        // ① 즉시 스레드풀에 위임
+        amrTaskExecutor.execute(() -> {
+            try {
+                Map<String, Object> jsonMap = objectMapper.readValue(payload, Map.class);
+                String msgName = (String)((Map<?, ?>)jsonMap.get("header")).get("msgName");
+                switch (msgName) {
+                    case "AMR_STATE":
+                        handleAmrState(jsonMap, session);
+                        break;
+                    case "TRAFFIC_REQ":
+                        handleTrafficRequest(jsonMap, session);
+                        break;
+                    case "SIMULATION_START":
+                        handleStimulatorStart();
+                        break;
+                    default:
+                        log.warn("Unknown message: {}", msgName);
+                }
+            } catch (Exception ex) {
+                log.error("비동기 메시지 처리 중 에러", ex);
+            }
+        });
+        // ② I/O 스레드는 즉시 반환 → 다음 메시지 수신 대기
     }
 
     @Override
