@@ -26,39 +26,37 @@ public class AmrRedisInitializer {
     @PostConstruct
     public void initRedisForAmrs() {
         List<String> amrIds = amrService.findAll()
-                                        .stream()
-                                        .map(AMR::getAmrId) // Amr 객체에 따라 getter 조정
-                                        .toList();
+                .stream()
+                .map(AMR::getAmrId)
+                .toList();
 
         for (String amrId : amrIds) {
             String key = "AMR_STATUS:" + amrId;
 
-            // 존재하지 않을 때만 빈 값 생성
-            Boolean exists = stringRedisTemplate.hasKey(key);
-            if (exists == null || !exists) {
-                AmrStatusRedis emptyStatus = AmrStatusRedis.builder()
-                        .amrId(amrId)
-                        .x(0)
-                        .y(0)
-                        .direction(0)
-                        .state(0)
-                        .battery(0)
-                        .loading(false)
-                        .linearVelocity(0)
-                        .currentNode(0)
-                        .missionId("")
-                        .missionType("UNKNOWN")
-                        .submissionId(0)
-                        .errorList("")
-                        .type("")
-                        .submissionList(List.of())
-                        .routeList(List.of())
-                        .build();
+            // 무조건 새로 덮어씀
+            AmrStatusRedis emptyStatus = AmrStatusRedis.builder()
+                    .amrId(amrId)
+                    .x(0)
+                    .y(0)
+                    .direction(0)
+                    .state(0)
+                    .battery(0)
+                    .loading(false)
+                    .linearVelocity(0)
+                    .currentNode(0)
+                    .missionId("")
+                    .missionType("UNKNOWN")
+                    .submissionId(0)
+                    .errorList("")
+                    .type("")
+                    .submissionList(List.of())
+                    .routeList(List.of())
+                    .build();
 
-                stringRedisTemplate.opsForHash().putAll(key, toMap(emptyStatus));
-            }
+            stringRedisTemplate.opsForHash().putAll(key, toMap(emptyStatus));
         }
     }
+
 
     private Map<String, String> toMap(AmrStatusRedis status) {
         Map<String, String> map = new HashMap<>();
