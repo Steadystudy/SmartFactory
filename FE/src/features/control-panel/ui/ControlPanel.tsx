@@ -16,7 +16,7 @@ export const ControlPanel = () => {
       <TabsContent value='amr' className='w-full h-full overflow-y-auto hide-scrollbar'>
         <AMRControl />
       </TabsContent>
-      <TabsContent value='equipment' className='h-full'>
+      <TabsContent value='equipment' className='w-full h-full overflow-y-auto hide-scrollbar'>
         <FacilityControl />
       </TabsContent>
     </Tabs>

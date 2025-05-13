@@ -21,31 +21,30 @@ export const Model3DRenderer = () => {
         switch (amrInfo.type) {
           case 'Type-A':
             return (
-              <SSF250Model
+              <AMRModel
                 key={amrInfo.amrId}
                 position={position}
                 rotation={rotation}
-                modelId={amrInfo.amrId}
+                amrState={amrInfo}
               />
             );
           case 'Type-B':
             return (
-              <SSF1200Model
+              <SSF250Model
                 key={amrInfo.amrId}
                 position={position}
                 rotation={rotation}
-                modelId={amrInfo.amrId}
+                amrState={amrInfo}
               />
             );
           case 'Type-C':
           default:
             return (
-              <AMRModel
+              <SSF1200Model
                 key={amrInfo.amrId}
                 position={position}
                 rotation={rotation}
-                loading={amrInfo.loading}
-                modelId={amrInfo.amrId}
+                amrState={amrInfo}
               />
             );
         }
