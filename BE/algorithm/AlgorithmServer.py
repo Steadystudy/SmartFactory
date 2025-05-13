@@ -26,7 +26,7 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
         # robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
         # node_id=random.sample(robot_candidates, k=1)[0]
 
-        loading = 1 if str(h.get("loading", "")).upper() == "LOADING" else 0
+        loading = 1 if str(h.get("missionType", "")).upper() in ("LOADING", "CHARGING") else 0
         robot_list.append((amr_id, node_id, loading))
     return robot_list
 
