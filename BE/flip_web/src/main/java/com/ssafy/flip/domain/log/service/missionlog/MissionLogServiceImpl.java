@@ -1,7 +1,7 @@
-package com.ssafy.flip.domain.log.service;
+package com.ssafy.flip.domain.log.service.missionlog;
 
 import com.ssafy.flip.domain.log.entity.MissionLog;
-import com.ssafy.flip.domain.log.repository.MissionLogRepository;
+import com.ssafy.flip.domain.log.repository.missionlog.MissionLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

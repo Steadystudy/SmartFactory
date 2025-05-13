@@ -62,4 +62,10 @@ public class StatusController {
     public ResponseEntity<ProductionResponseDTO> getProductionStatus(){
         return ResponseEntity.ok(statusService.getProductionStatus());
     }
+
+    @Operation(summary = "heatmap status", description = "히트맵 정보 확인")
+    @GetMapping("/heatmap")
+    public ResponseEntity<HeatMapResponseDTO> getHeatMapStatus(){
+        return ResponseEntity.ok(statusService.getHeatMapStatus());
+    }
 }
