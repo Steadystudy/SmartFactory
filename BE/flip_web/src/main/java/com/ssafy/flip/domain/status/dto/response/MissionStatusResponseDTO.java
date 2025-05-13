@@ -1,6 +1,5 @@
 package com.ssafy.flip.domain.status.dto.response;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 
 import java.util.ArrayList;
@@ -11,8 +10,6 @@ public record MissionStatusResponseDTO(
 ) {
     public static MissionStatusResponseDTO from(AmrStatusRedis amrStatusRedis) {
         List<SubmissionDTO> submissionDTOList = new ArrayList<>();
-        ObjectMapper objectMapper = new ObjectMapper();
-
         List<SubmissionDTO> submissionList = amrStatusRedis.getSubmissionList();
         int submissionId = amrStatusRedis.getSubmissionId(); // 기준 인덱스
 
