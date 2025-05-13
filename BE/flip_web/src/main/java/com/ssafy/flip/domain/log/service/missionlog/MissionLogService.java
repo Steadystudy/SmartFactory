@@ -1,4 +1,4 @@
-package com.ssafy.flip.domain.log.service;
+package com.ssafy.flip.domain.log.service.missionlog;
 
 import com.ssafy.flip.domain.log.entity.MissionLog;
 
