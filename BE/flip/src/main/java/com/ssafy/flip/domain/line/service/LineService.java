@@ -13,4 +13,8 @@ public interface LineService {
 
     Line getLine(Long id);
 
+    void disableMissionAssignment(String missionId);
+
+    void markMissionBlockedNow(String missionId);
+
 }

@@ -17,6 +17,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -62,6 +63,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final Map<Integer, Object>  nodeLocks     = new ConcurrentHashMap<>();
 
     private final ThreadPoolTaskExecutor amrTaskExecutor;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     private final Map<String, Integer> missionToLine = new HashMap<>();
 
@@ -82,7 +84,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        System.out.println("AMR 연결 : " + session.getId());
+        log.info("AMR 연결 : {}" ,session.getId());
         // WebSocketServiceImpl에서 JSON 데이터 가져옴
         String mapInfoJson = webSocketService.sendMapInfo();
         session.sendMessage(new TextMessage(mapInfoJson));
@@ -90,9 +92,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
         // 직접 WebSocket 세션에 메시지 전송
         if (session.isOpen()) {
             session.sendMessage(new TextMessage(mapInfoJson));
-            System.out.println("✅ Map Info 전송 완료: " + mapInfoJson);
+            log.info("✅ Map Info 전송 완료: {}" , mapInfoJson);
         } else {
-            System.err.println("❌ WebSocket 세션이 닫혀 있음: " + session.getId());
+            log.error("❌ WebSocket 세션이 닫혀 있음: {}", session.getId());
         }
     }
 
@@ -126,7 +128,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        System.out.println("AMR 연결 종료: " + session.getId());
+        log.info("AMR 연결 종료: {}", session.getId());
 
         // 연결이 끊긴 session과 매칭되는 amrId를 찾기
         String disconnectedAmrId = null;
@@ -142,7 +144,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             lastSubmissionMap.remove(disconnectedAmrId);
             submissionStartMap.remove(disconnectedAmrId);
             routeTempMap.remove(disconnectedAmrId);
-            System.out.println("🧹 AMR 데이터 정리 완료: " + disconnectedAmrId);
+            log.info("🧹 AMR 데이터 정리 완료: {}", disconnectedAmrId);
         }
     }
 
@@ -210,7 +212,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
                 MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
                 if (delayed != null) {
+                    lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
                     algorithmResultConsumer.processMission(delayed);
+                    
                     algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
                     log.info("🚀 지연 미션 실행 완료: {}", amrId);
 
@@ -218,6 +222,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 }
                 // 3) 아니면 일반 상태 트리거
                 else {
+                    lineService.markMissionBlockedNow(missionId);
                     String payload = objectMapper.writeValueAsString(amrDto);
                     trigger.run(payload);
 
@@ -293,10 +298,11 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
         // 이 시점에 세션을 맵에 담아두면, 이후 sendTrafficPermit에서 항상 꺼낼 수 있습니다.
         amrSessions.put(amrId, session);
-        log.info("▶ TRAFFIC_REQ: amrId={} sessionId={} 등록", amrId, session.getId());
+        //log.info("▶ TRAFFIC_REQ: amrId={} sessionId={} 등록", amrId, session.getId());
+
 
         // 기존 로직 그대로
-        System.out.println("🚥 TRAFFIC_REQ 수신: " + amrId + " → 노드 " + nodeId);
+        //log.info("🚥 TRAFFIC_REQ 수신: {} → 노드 {}", amrId, nodeId);
         nodeQueues.computeIfAbsent(nodeId, k -> new ConcurrentLinkedQueue<>());
 
         String currentOccupant = nodeOccupants.get(nodeId);
@@ -305,15 +311,14 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             sendTrafficPermit(amrId, missionId, submissionId, nodeId, session);
         } else {
             nodeQueues.get(nodeId).add(amrId);
-            System.out.println("대기열 추가됨: " + amrId + " → 노드 " + nodeId);
+            //log.info("대기열 추가됨: {} → 노드 {}", amrId, nodeId);
         }
     }
 
     private void sendTrafficPermit(String amrId, String missionId, int submissionId, int nodeId, WebSocketSession session) {
         try {
 
-            System.out.println("▶ sendTrafficPermit 호출: amrId=" + amrId
-                    + ", session=" + session + ", open=" + (session != null && session.isOpen()));
+            //log.info("▶ sendTrafficPermit 호출: amrId={}, session={}, open={}", amrId, session, session != null && session.isOpen());
 
             Map<String, Object> wrapper = new HashMap<>();
 
@@ -338,12 +343,12 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
             if (session != null && session.isOpen()) {
                 session.sendMessage(new TextMessage(message));
-                System.out.println("✅ Traffic Permit 전송 성공: " + message);
+                //log.info("✅ Traffic Permit 전송 성공: {}", message);
             } else {
-                System.err.println("❌ Traffic Permit 전송 실패: " + amrId + " 세션이 없음");
+                log.error("❌ Traffic Permit 전송 실패: {} 세션이 없음", amrId);
             }
         } catch (Exception e) {
-            System.err.println("❌ Traffic Permit 전송 실패: " + e.getMessage());
+            log.error("❌ Traffic Permit 전송 실패", e);
         }
     }
 
