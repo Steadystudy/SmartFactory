@@ -1,6 +1,7 @@
 package com.ssafy.flip.domain.status.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.status.dto.response.RouteDTO;
 import com.ssafy.flip.domain.status.dto.response.SubmissionDTO;
@@ -41,6 +42,7 @@ public class AmrStatusRedisManualRepository {
         return Optional.of(convertMapToAmrStatusRedis(map, amrId));
     }
 
+
     private AmrStatusRedis convertMapToAmrStatusRedis(Map<Object, Object> map, String amrId) {
         List<SubmissionDTO> submissionList = parseJsonStringList(
                 castToListOfString(map.get("submissionList")), SubmissionDTO.class);
@@ -68,15 +70,27 @@ public class AmrStatusRedisManualRepository {
                 .build();
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> castToListOfString(Object obj) {
         if (obj instanceof List<?>) {
             return ((List<?>) obj).stream()
                     .map(Object::toString)
                     .collect(Collectors.toList());
+        } else if (obj instanceof String str) {
+            if (str.isBlank()) {
+                return List.of();  // 빈 문자열이면 빈 리스트 반환
+            }
+
+            try {
+                return objectMapper.readValue(str, new TypeReference<List<String>>() {});
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("castToListOfString: JSON 문자열 배열 파싱 실패: " + str, e);
+            }
         }
-        return List.of(); // 비어 있거나 형식이 다르면 빈 리스트
+
+        throw new IllegalArgumentException("castToListOfString: 지원하지 않는 타입: " + obj.getClass());
     }
+
+
 
     private <T> List<T> parseJsonStringList(List<String> jsonList, Class<T> clazz) {
         return jsonList.stream()

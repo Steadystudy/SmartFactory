@@ -62,7 +62,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                     if(missionDTO == null){
                         missionDTO = new AmrMissionDTO(
                                 amrId,
-                                status.getType(),
+                                "WAITING",
                                 0,
                                 0,
                                 0,
