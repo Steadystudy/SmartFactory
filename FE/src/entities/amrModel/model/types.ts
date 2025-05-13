@@ -1,3 +1,4 @@
+import { AMR_CURRENT_STATE } from '@/features/visualization';
 import { Group, Object3DEventMap } from 'three';
 
 // AMR 상태 정의
@@ -56,11 +57,9 @@ export interface ModelInfo {
 
 export interface Model3DProps {
   position: [number, number, number];
-  scale?: number;
   rotation: [number, number, number];
   scene: Group<Object3DEventMap>;
-  modelId: string;
   onClick?: () => void;
   className?: string;
-  loading?: boolean;
+  amrState: AMR_CURRENT_STATE;
 }

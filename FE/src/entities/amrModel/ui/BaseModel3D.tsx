@@ -12,15 +12,9 @@ const ANIMATION_SETTINGS = {
   positionDamping: 0.1,
 };
 
-export const BaseModel3D = ({
-  scene,
-  position,
-  scale = 1,
-  rotation,
-  modelId,
-  onClick,
-}: Model3DProps) => {
+export const BaseModel3D = ({ scene, position, rotation, amrState, onClick }: Model3DProps) => {
   const { selectedAmrId, setSelectedAmrId } = useSelectedAMRStore();
+  const { amrId } = amrState;
   const { gl } = useThree();
 
   // 바깥 클릭 이벤트 핸들러 추가
@@ -40,7 +34,7 @@ export const BaseModel3D = ({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedAmrId(modelId);
+    setSelectedAmrId(amrId);
     onClick?.();
   };
 
@@ -81,11 +75,11 @@ export const BaseModel3D = ({
     modelRef.current.rotation.copy(currentRotation.current);
   });
 
-  // hover 효과 적용
+  // click 효과 적용
   useEffect(() => {
     scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        if (selectedAmrId === modelId) {
+        if (selectedAmrId === amrId) {
           child.material.emissive = new THREE.Color(0x0000ff);
           child.material.emissiveIntensity = 0.2;
           child.material.opacity = 0.9;
@@ -96,15 +90,9 @@ export const BaseModel3D = ({
         }
       }
     });
-  }, [selectedAmrId, modelId]);
+  }, [selectedAmrId, amrId]);
 
   return (
-    <primitive
-      ref={modelRef}
-      object={scene}
-      scale={scale}
-      className='cursor-pointer'
-      onClick={handleClick}
-    />
+    <primitive ref={modelRef} object={scene} className='cursor-pointer' onClick={handleClick} />
   );
 };

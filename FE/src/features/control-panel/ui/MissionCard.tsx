@@ -114,7 +114,9 @@ export const MissionCard = ({ data }: MissionCardProps) => {
       <div className='flex gap-2'>
         <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.amrId}</span>
         <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.type}</span>
-        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>배터리(수정)</span>
+        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>
+          {data.battery}%
+        </span>
         {data.errorCode && (
           <span className='px-2 py-1 text-xs text-red-600 bg-red-100 rounded-md'>
             {data.errorCode}
