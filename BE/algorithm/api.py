@@ -214,7 +214,7 @@ def hungarian(robotList, taskList):
             # 스케줄 기록
             bisect.insort(LoadingStartTime[best_p],best_start)
 
-            print(f"📦 로봇 {robot_name} → 포트 {best_p} "f"({best_start}s 적재 시작, {best_ready}s 대기)")
+            #print(f"📦 로봇 {robot_name} → 포트 {best_p} "f"({best_start}s 적재 시작, {best_ready}s 대기)")
             to_pickup, c1 = aStar(start_node, best_p)
             to_dest,   c2 = aStar(best_p, dest, c1+EXTRA_PICKUP_COST)
             final_path, total_cost = to_pickup + to_dest, c1 + c2

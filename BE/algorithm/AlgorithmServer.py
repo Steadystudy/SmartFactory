@@ -11,6 +11,8 @@ load_dotenv()
 KAFKA_HOST = os.getenv('KAFKA_HOST',"localhost")
 KAFKA_BOOT = os.getenv("KAFKA_BOOT", "localhost:9092")
 # -------------------- ① Redis → Python --------------------
+import json
+
 def fetch_robot_list() -> list[tuple[str, int, int]]:
     robot_list = []
     for i in range(1, 21):
@@ -19,16 +21,37 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
             continue
 
         h = r.hgetall(key)
-        amr_id   = h["amrId"] if "amrId" in h else f"AMR{i:03}"
-        node_id  = int(h.get("currentNode", 0))           # 없으면 0
+        amr_id = h.get("amrId", f"AMR{i:03}")
+        current_node = int(h.get("currentNode", 0))
+        node_id = current_node  # 기본값
 
-        # excluded_ids = {204, 205, 212, 213, 220, 221, 228, 229}
-        # robot_candidates = [i for i in list(range(1, 61)) + list(range(101, 233)) if i not in excluded_ids]
-        # node_id=random.sample(robot_candidates, k=1)[0]
+        # submissionList가 존재할 때 처리
+        if "submissionList" in h:
+            try:
+                submission_list = [json.loads(s) for s in json.loads(h["submissionList"])]
+                # submissionNode 목록만 추출
+                submission_nodes = [s.get("submissionNode") for s in submission_list]
+
+                # currentNode가 submissionList에 있다면, 그 다음 submissionNode 사용
+                if current_node in submission_nodes:
+                    idx = submission_nodes.index(current_node)
+                    if idx + 1 < len(submission_nodes):
+                        node_id = int(submission_nodes[idx + 1])
+                else:
+                    # currentNode가 목록에 없을 경우 → 처음 submissionNode 유지 (또는 그대로)
+                    pass  # 그대로 current_node 유지
+
+            except Exception as e:
+                print(f"⚠️ submissionList 파싱 오류 (AMR{i:03}): {e}")
+        if i == testNumber:
+            print("계산전 current 와 노드 id",current_node,node_id)
 
         loading = 1 if str(h.get("missionType", "")).upper() in ("LOADING", "CHARGING") else 0
         robot_list.append((amr_id, node_id, loading))
+
     return robot_list
+
+
 
 
 def fetch_line_status() -> list[tuple[int, float]]:
@@ -109,12 +132,16 @@ def listen_loop():
                 "expectedArrival" : int(cost)
             }
             all_results.append(result)
-        print(all_results)
+            if amr_id=="AMR0"+str(testNumber):
+                h = r.hgetall("AMR_STATUS:AMR0"+str(testNumber))
+                print("현재 current노드",h.get("currentNode", 0))
+                print(result)
+        #print(all_results)
         if all_results:  # ✅ 1개의 메시지로 전송
             producer.produce("algorithm-result", json.dumps(all_results))
             producer.flush()
 
-
+testNumber=16
 if __name__ == "__main__":
     #api.mapInit()
     listen_loop()

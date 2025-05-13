@@ -143,7 +143,7 @@ public class AlgorithmResultConsumer {
                 MissionResponse part1 = new MissionResponse(
                         res.getAmrId(),
                         String.format("MISSION%03d", r1.get(r1.size() - 1)),
-                        res.getMissionType(),
+                        "UNLOADING",
                         res.getExpectedArrival(),
                         r1
                 );
