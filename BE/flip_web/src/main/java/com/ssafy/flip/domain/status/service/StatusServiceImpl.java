@@ -83,11 +83,11 @@ public class StatusServiceImpl implements StatusService{
 
         //DB에서 시간 들고와서 계산
         //Redis에서 현재 데이터 들고와서 계산
-        List<MissionLog> missionLogs = missionLogService.findBeforeHour(8);
+        List<MissionLog> missionLogs = missionLogService.findBeforeHour(6);
 
         int amrWorkTime = 0;
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime targetTime = LocalDateTime.now().minusHours(8);
+        LocalDateTime targetTime = LocalDateTime.now().minusHours(6);
 
         for (MissionLog log : missionLogs) {
             LocalDateTime effectiveStartTime = log.getStartedAt().isBefore(targetTime) ? targetTime : log.getStartedAt();
