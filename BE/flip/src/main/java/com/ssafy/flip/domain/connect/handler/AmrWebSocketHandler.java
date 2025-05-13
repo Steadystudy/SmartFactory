@@ -215,7 +215,13 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
                 MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
                 if (delayed != null) {
-                    lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
+                    if ((11<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=20) ||(31<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=40)){
+                        lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
+                    }
+                    else if ((21<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=30) ||(41<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=50)){
+                        lineService.updateMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
+                    }
+
                     algorithmResultConsumer.processMission(delayed);
                     
                     algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
