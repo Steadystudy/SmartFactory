@@ -3,7 +3,7 @@ import heapq
 import json
 import random
 import numpy as np
-
+import bisect
 import pymysql
 import math
 import os
@@ -199,19 +199,22 @@ def hungarian(robotList, taskList):
             for p in range(1,11):
                 arrival = MovingTimeTable[start_node][p-1]
                 waitTime = 0
+                storageTime = MovingTimeTable[start_node][p-1]
                 for absTime in LoadingStartTime[p]:
-                    if abs(absTime-arrival)<10:
-                        waitTime=absTime+10-arrival         # 대기 포함
-                done    = arrival+waitTime + loadingTimeTable[p][dest] # 목적지까지
+                    if absTime<=storageTime<absTime+10:
+                        storageTime=absTime+10
+                    elif storageTime<absTime<storageTime+10:
+                        storageTime=absTime+10
+                waitTime=storageTime-arrival
+                done = arrival+waitTime + loadingTimeTable[p][dest] # 목적지까지
 
                 if done < best_done:
                     best_p, best_start,best_ready, best_done = p, arrival+waitTime,waitTime, done # 적재 포트,적재 시작 시간,대기시간,끝나는시간
 
             # 스케줄 기록
-            LoadingStartTime[best_p].append(best_start)
+            bisect.insort(LoadingStartTime[best_p],best_start)
 
             print(f"📦 로봇 {robot_name} → 포트 {best_p} "f"({best_start}s 적재 시작, {best_ready}s 대기)")
-
             to_pickup, c1 = aStar(start_node, best_p)
             to_dest,   c2 = aStar(best_p, dest, c1+EXTRA_PICKUP_COST)
             final_path, total_cost = to_pickup + to_dest, c1 + c2
