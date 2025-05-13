@@ -20,10 +20,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class WebResultConsumer {
 
-    private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisRepository amrStatusRedisRepository;
     private final MissionService missionService;
-    private final LineService lineService;
+    private final StatusWebSocketService statusWebSocketService;
 
     private final ObjectMapper mapper;
 
@@ -37,19 +36,10 @@ public class WebResultConsumer {
                     new TypeReference<List<AmrMissionDTO>>() {}
             );
 
-            System.out.println("mission "+msg);
-
             //미션 저장
             Map <String, AmrMissionDTO> amrMissionMap = missionService.setAmrMission(responses);
 
-            List<AmrMissionResponseDTO> amrMissionResponseDTOS = amrStatusRedisRepository.findAll().stream()
-                    .map(status -> {
-                        AmrMissionDTO missionDTO = amrMissionMap.get(status.getAmrId());
-                        return AmrMissionResponseDTO.from(status, missionDTO);
-                    })
-                    .toList();
-
-            messagingTemplate.convertAndSend("/amr/mission", amrMissionResponseDTOS);
+            statusWebSocketService.pushMissionStatus();
         } catch (Exception e) {
             log.error(e.getMessage());
         }
