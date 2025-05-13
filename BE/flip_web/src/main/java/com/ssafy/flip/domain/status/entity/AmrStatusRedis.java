@@ -1,5 +1,7 @@
 package com.ssafy.flip.domain.status.entity;
 
+import com.ssafy.flip.domain.status.dto.request.RouteDTO;
+import com.ssafy.flip.domain.status.dto.request.SubmissionDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -37,8 +39,8 @@ public class AmrStatusRedis {
     private String type;
 
     //submissionId, submissionNode, submissionX, submissionY로 구성
-    private List<String> submissionList;
+    private List<SubmissionDTO> submissionList;
     //지나간 루트를 표시
     //routeId(순서), routeNode, startedAt으로 구성
-    private List<String> routeList;
+    private List<RouteDTO> routeList;
 }

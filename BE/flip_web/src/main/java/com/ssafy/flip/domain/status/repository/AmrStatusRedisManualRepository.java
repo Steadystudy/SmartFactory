@@ -1,5 +1,9 @@
 package com.ssafy.flip.domain.status.repository;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.flip.domain.status.dto.request.RouteDTO;
+import com.ssafy.flip.domain.status.dto.request.SubmissionDTO;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
@@ -12,6 +16,7 @@ import java.util.stream.Collectors;
 public class AmrStatusRedisManualRepository {
 
     private final RedisTemplate<String, String> redisTemplate;
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public List<AmrStatusRedis> findAllAmrStatus() {
         Set<String> keys = redisTemplate.keys("AMR_STATUS:*");
@@ -37,6 +42,12 @@ public class AmrStatusRedisManualRepository {
     }
 
     private AmrStatusRedis convertMapToAmrStatusRedis(Map<Object, Object> map, String amrId) {
+        List<SubmissionDTO> submissionList = parseJsonStringList(
+                castToListOfString(map.get("submissionList")), SubmissionDTO.class);
+
+        List<RouteDTO> routeList = parseJsonStringList(
+                castToListOfString(map.get("routeList")), RouteDTO.class);
+
         return AmrStatusRedis.builder()
                 .amrId(amrId)
                 .x(Float.parseFloat((String) map.get("x")))
@@ -52,8 +63,30 @@ public class AmrStatusRedisManualRepository {
                 .submissionId(Integer.parseInt((String) map.get("submissionId")))
                 .errorList((String) map.get("errorList"))
                 .type((String) map.get("type"))
-                .submissionList(List.of())  // 추후 파싱 필요 시 처리
-                .routeList(List.of())       // 추후 파싱 필요 시 처리
+                .submissionList(submissionList)  // 추후 파싱 필요 시 처리
+                .routeList(routeList)       // 추후 파싱 필요 시 처리
                 .build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> castToListOfString(Object obj) {
+        if (obj instanceof List<?>) {
+            return ((List<?>) obj).stream()
+                    .map(Object::toString)
+                    .collect(Collectors.toList());
+        }
+        return List.of(); // 비어 있거나 형식이 다르면 빈 리스트
+    }
+
+    private <T> List<T> parseJsonStringList(List<String> jsonList, Class<T> clazz) {
+        return jsonList.stream()
+                .map(json -> {
+                    try {
+                        return objectMapper.readValue(json, clazz);
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException("JSON 파싱 실패: " + json, e);
+                    }
+                })
+                .collect(Collectors.toList());
     }
 }
