@@ -1,4 +1,4 @@
-package com.ssafy.flip.domain.log.repository;
+package com.ssafy.flip.domain.log.repository.missionlog;
 
 import com.ssafy.flip.domain.log.entity.MissionLog;
 import org.springframework.data.jpa.repository.JpaRepository;

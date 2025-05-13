@@ -4,25 +4,25 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.line.entity.Line;
 import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.log.entity.MissionLog;
-import com.ssafy.flip.domain.log.service.MissionLogService;
-import com.ssafy.flip.domain.status.dto.request.*;
+import com.ssafy.flip.domain.log.service.edge.RouteService;
+import com.ssafy.flip.domain.log.service.missionlog.MissionLogService;
+import com.ssafy.flip.domain.node.entity.Edge;
+import com.ssafy.flip.domain.node.entity.Node;
+import com.ssafy.flip.domain.node.service.edge.EdgeService;
+import com.ssafy.flip.domain.node.service.node.NodeService;
 import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
-import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import com.ssafy.flip.domain.storage.entity.Storage;
 import com.ssafy.flip.domain.storage.service.StorageService;
-import jakarta.transaction.Transactional;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -36,11 +36,29 @@ public class StatusServiceImpl implements StatusService{
 
     private final LineService lineService;
 
+    private final EdgeService edgeService;
+
+    private final NodeService nodeService;
+
+    private final RouteService routeService;
+
     private final MissionLogService missionLogService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private Map<Integer, Edge> edgeMap;
+
+    private Map<Integer, Node> nodeMap;
+
+    @PostConstruct
+    public void initMaps() {
+        this.edgeMap = edgeService.findAll().stream()
+                .collect(Collectors.toMap(Edge::getEdgeId, edge -> edge));
+        this.nodeMap = nodeService.findAll().stream()
+                .collect(Collectors.toMap(Node::getNodeId, node -> node));
+    }
 
     @Override
     public AmrRealTimeResponseDTO getAmrRealTimeStatus() {
@@ -177,6 +195,43 @@ public class StatusServiceImpl implements StatusService{
         }
 
         return new ProductionResponseDTO(data);
+    }
+
+    @Override
+    public HeatMapResponseDTO getHeatMapStatus() {
+
+        //route 쭉 들고와서
+        List<Object[]> routeList = routeService.countRoutesByEdgeIdAfter(LocalDateTime.now().minusHours(6));
+
+        //Edge에 카운트 세고 x, y 찾아서 리턴
+        Map<Integer, Integer> nodeCountMap = new HashMap<>();
+
+        for (Object[] row : routeList) {
+            Integer edgeId = (Integer) row[0];
+            Long count = (Long) row[1];
+
+            Edge edge = edgeMap.get(edgeId);
+            if (edge == null) continue;
+
+            Node node1 = edge.getNode1();
+            Node node2 = edge.getNode2();
+
+            nodeCountMap.merge(node1.getNodeId(), count.intValue(), Integer::sum);
+            nodeCountMap.merge(node2.getNodeId(), count.intValue(), Integer::sum);
+        }
+
+        List<HeatMapResponseDTO.HeatMapDTO> heatMapList = new ArrayList<>();
+
+        for (Node node : nodeMap.values()) {
+            int count = nodeCountMap.getOrDefault(node.getNodeId(), 0);
+
+            heatMapList.add(new HeatMapResponseDTO.HeatMapDTO(
+                    node.getX(), node.getY(),
+                    count
+            ));
+        }
+
+        return new HeatMapResponseDTO(heatMapList);
     }
 
     private Map<Integer, Long> groupMissionLogsByHour(List<MissionLog> missionLogs) {
