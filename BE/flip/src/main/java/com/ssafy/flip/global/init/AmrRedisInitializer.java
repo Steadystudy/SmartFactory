@@ -89,11 +89,9 @@ public class AmrRedisInitializer {
 
         IntStream.rangeClosed(11, 50).forEach(i -> {
             String key = "MISSION_PT:" + i;
-            Boolean exists = stringRedisTemplate.hasKey(key);
-            if (Boolean.FALSE.equals(exists)) {
-                stringRedisTemplate.opsForValue().set(key, now);
-            }
+            stringRedisTemplate.opsForValue().set(key, now); // 무조건 덮어씀
         });
     }
+
 
 }
