@@ -66,7 +66,8 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private final Map<String, Integer> missionToLine = new HashMap<>();
-
+    private final LineService lineService;
+    
     @PostConstruct
     public void initObjectMapper() {
         objectMapper.registerModule(new JavaTimeModule());
