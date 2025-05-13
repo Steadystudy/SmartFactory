@@ -1,6 +1,6 @@
 'use client';
 
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { MapControls } from '@react-three/drei';
 import { useModelStore } from '@/shared/model/store';
 import { Html } from '@react-three/drei';
@@ -8,6 +8,12 @@ import { AMR_CURRENT_STATE } from '@/features/visualization';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { Map3D } from '@/entities/map';
 import { useAMRAnimation, useCameraFollow, AMR_STATE_COLORS } from '../lib';
+import { HeatmapLayer } from '@/features/heatmap/ui/HeatmapLayer';
+import { HeatmapController } from '@/features/heatmap/ui/HeatmapController';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { HeatmapLegend } from '@/features/heatmap/ui/HeatmapLegend';
 
 // AMR 2D 렌더러 컴포넌트
 const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
@@ -65,18 +71,44 @@ const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
 };
 
 // 2D 맵과 AMR을 포함하는 컴포넌트
-const Scene2DContent = () => {
+const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
   const { models } = useModelStore();
   const { controlsRef } = useCameraFollow({ is2D: true });
 
+  const BOUNDS = {
+    MIN: 0,
+    MAX: 80
+  } as const;
+
+  const clamp = (value: number, min: number, max: number) => {
+    return Math.max(min, Math.min(max, value));
+  };
+
+  useFrame(() => {
+    if (!controlsRef.current) return;
+    
+    const camera = controlsRef.current.object;
+    const target = controlsRef.current.target;
+    
+    // X, Z축 제한
+    target.x = clamp(target.x, BOUNDS.MIN, BOUNDS.MAX);
+    target.z = clamp(target.z, BOUNDS.MIN, BOUNDS.MAX);
+    
+    // 카메라 위치도 제한
+    camera.position.x = clamp(camera.position.x, BOUNDS.MIN, BOUNDS.MAX);
+    camera.position.z = clamp(camera.position.z, BOUNDS.MIN, BOUNDS.MAX);
+  });
+
   return (
     <>
+      {showHeatmap && <HeatmapController />}
       {models.map((amrInfo) => (
         <AMR2DRenderer
           key={amrInfo.amrId}
           amrInfo={{ ...amrInfo, dir: amrInfo.dir - Math.PI / 2 }}
         />
       ))}
+      {showHeatmap && <HeatmapLayer />}
       {/* 조명 설정 */}
       <ambientLight intensity={0.5} />
       <directionalLight position={[0, 10, 0]} intensity={0.5} />
@@ -85,11 +117,11 @@ const Scene2DContent = () => {
         ref={controlsRef}
         enableZoom={true}
         minDistance={5}
-        maxDistance={40}
+        maxDistance={60}
         maxPolarAngle={0}
         minPolarAngle={0}
         enableRotate={false}
-        target={[40, 0, 30]}
+        target={[40, 0, 40]}
       />
     </>
   );
@@ -98,6 +130,7 @@ const Scene2DContent = () => {
 // 2D 시각화 컴포넌트
 const Scene2DViewer = () => {
   const { reset } = useSelectedAMRStore();
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   const handleCanvasClick = (event: React.MouseEvent) => {
     // event.defaultPrevented가 true이면 하위 컴포넌트에서 이벤트를 처리한 것
@@ -107,14 +140,29 @@ const Scene2DViewer = () => {
   };
 
   return (
-    <div className='w-full h-full cursor-grab active:cursor-grabbing' onClick={handleCanvasClick}>
+    <div className='w-full h-full cursor-grab active:cursor-grabbing relative' onClick={handleCanvasClick}>
+      <div className='absolute top-4 right-4 z-10'>
+        <Button
+          variant="outline"
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            setShowHeatmap(!showHeatmap);
+          }}
+          className="bg-black/50 text-white hover:bg-white/50 flex items-center gap-2 cursor-pointer"
+        >
+          {showHeatmap ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          <span>{showHeatmap ? '이동 빈도 OFF' : '이동 빈도 ON'}</span>
+        </Button>
+      </div>
+      {/* 히트맵 범례 */}
+      {showHeatmap && <HeatmapLegend />}
       <Canvas
         camera={{
-          position: [40, 40, 40],
+          position: [40, 60, 40],
         }}
       >
         <Map3D />
-        <Scene2DContent />
+        <Scene2DContent showHeatmap={showHeatmap} />
       </Canvas>
     </div>
   );
