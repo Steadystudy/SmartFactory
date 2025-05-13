@@ -17,4 +17,6 @@ public interface LineService {
 
     void markMissionBlockedNow(String missionId);
 
+    void updateMissionAssignment(String missionId);
+
 }

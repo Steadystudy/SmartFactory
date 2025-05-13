@@ -40,6 +40,13 @@ public class LineServiceImpl implements LineService {
     }
 
     @Override
+    public void updateMissionAssignment(String missionId){
+        String redisKey = "MISSION_PT:" + missionId;
+        String now = LocalDateTime.now().toString();  // 예: "2025-05-13T13:08:55.8292675"
+        redisTemplate.opsForValue().set(redisKey, now);
+    }
+
+    @Override
     public void markMissionBlockedNow(String missionId) {
         // "MISSION050" → 50
         String missionNum = missionId.replaceAll("\\D+", "");
