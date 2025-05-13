@@ -1,13 +1,9 @@
 package com.ssafy.flip.domain.status.service;
 
-import com.ssafy.flip.domain.line.entity.Line;
-import com.ssafy.flip.domain.line.service.LineService;
-import com.ssafy.flip.domain.status.dto.request.*;
 import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 import com.ssafy.flip.domain.status.entity.LineStatusRedis;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
-import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import com.ssafy.flip.domain.status.repository.LineStatusRedisManualRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
