@@ -215,6 +215,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
                 MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
                 if (delayed != null) {
+                    //REdis에 미션 시간을 저장하자
                     if ((11<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=20) ||(31<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=40)){
                         lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
                     }
@@ -237,6 +238,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     // missionType을 UNLOADING으로 덮어쓰기
                     String amrKey = "AMR_STATUS:" + amrDto.body().amrId();
                     stringRedisTemplate.opsForHash().put(amrKey, "missionType", "UNLOADING");
+                    stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "");
 
                     trigger.run(payload);
 
