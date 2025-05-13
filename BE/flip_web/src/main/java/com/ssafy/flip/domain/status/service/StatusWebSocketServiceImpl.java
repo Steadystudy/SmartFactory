@@ -27,7 +27,6 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
     private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisManualRepository amrStatusRedisManualRepository;
     private final LineStatusRedisManualRepository lineStatusRedisManualRepository;
-    private final LineService lineService;
     private final MissionService missionService;
 
     @Scheduled(fixedRate = 100)
@@ -49,12 +48,12 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
         String destination = headerAccessor.getDestination();
 
         if (Objects.equals(destination, "/amr/mission")) {
-            pushMissionStatus(null);
+            pushMissionStatus();
         }
     }
 
     @Override
-    public void pushMissionStatus(AmrMissionRequestDTO requestDTO) {
+    public void pushMissionStatus() {
         //미션 저장
         Map<String, AmrMissionDTO> amrMissionMap = missionService.getAmrMission();
 
@@ -62,7 +61,6 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                 .map(status -> {
                     String rawAmrId = status.getAmrId();
                     String amrId = rawAmrId.startsWith("AMR_STATUS:") ? rawAmrId.substring("AMR_STATUS:".length()) : rawAmrId;
-                    System.out.println("MISSION: AMR ID = "+amrId);
                     AmrMissionDTO missionDTO = amrMissionMap.get(amrId);
                     if(missionDTO == null){
                         missionDTO = new AmrMissionDTO(
