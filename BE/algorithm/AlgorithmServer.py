@@ -44,7 +44,7 @@ def fetch_line_status() -> list[tuple[int, float]]:
             ts_str = ts_raw.decode() if isinstance(ts_raw, bytes) else str(ts_raw)
             ts_str = ts_str.strip('"')  # 큰따옴표 제거
 
-            if ts_str == "-1" or to_str == -1:
+            if ts_str == "-1" or ts_str == -1:
                 continue
 
             try:
