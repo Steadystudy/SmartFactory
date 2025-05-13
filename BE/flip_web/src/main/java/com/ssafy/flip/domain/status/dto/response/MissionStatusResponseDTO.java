@@ -13,18 +13,12 @@ public record MissionStatusResponseDTO(
         List<SubmissionDTO> submissionDTOList = new ArrayList<>();
         ObjectMapper objectMapper = new ObjectMapper();
 
-        List<String> submissionList = amrStatusRedis.getSubmissionList();
+        List<SubmissionDTO> submissionList = amrStatusRedis.getSubmissionList();
         int submissionId = amrStatusRedis.getSubmissionId(); // 기준 인덱스
 
         for (int i = submissionId; i < submissionList.size(); i++) {
-            String submissionJson = submissionList.get(i);
-            try {
-                SubmissionDTO dto = objectMapper.readValue(submissionJson, SubmissionDTO.class);
-                submissionDTOList.add(dto);
-            } catch (Exception e) {
-                // 파싱 실패하면 로그 찍고 넘어감
-                e.printStackTrace();
-            }
+            SubmissionDTO submissionJson = submissionList.get(i);
+            submissionDTOList.add(submissionJson);
         }
 
         return new MissionStatusResponseDTO(submissionDTOList);

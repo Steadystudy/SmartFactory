@@ -123,7 +123,7 @@ public class StatusServiceImpl implements StatusService{
                 try {
                     System.out.println(routeList.getFirst());
                     RouteDTO firstRoute = routeList.getFirst();
-                    LocalDateTime startedAt = LocalDateTime.parse(firstRoute.startedAt(), formatter);
+                    LocalDateTime startedAt = LocalDateTime.parse(firstRoute.getStartedAt(), formatter);
 
                     LocalDateTime effectiveStartTime = startedAt.isBefore(targetTime) ? targetTime : startedAt;
 
