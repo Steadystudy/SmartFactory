@@ -23,4 +23,5 @@ public class MissionServiceImpl implements MissionService {
         return missionRepository.findById(missionId)
                 .orElseThrow();
     }
+
 }

@@ -342,6 +342,8 @@ class AMR:
 
             yield from self.move_to_node(node, edge, prev)
             prev = node
+        self.current_node_id = prev["id"]
+        self.update_status()
 
         # ─── 완료/중단 후 초기화 ─────────────────────────────────────────
         self.state = 1
