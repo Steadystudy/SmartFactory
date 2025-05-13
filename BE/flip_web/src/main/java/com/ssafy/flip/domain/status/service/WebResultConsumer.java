@@ -2,14 +2,11 @@ package com.ssafy.flip.domain.status.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.status.dto.response.AmrMissionDTO;
-import com.ssafy.flip.domain.status.dto.response.AmrMissionResponseDTO;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -37,7 +34,7 @@ public class WebResultConsumer {
             );
 
             //미션 저장
-            Map <String, AmrMissionDTO> amrMissionMap = missionService.setAmrMission(responses);
+            missionService.setAmrMission(responses);
 
             statusWebSocketService.pushMissionStatus();
         } catch (Exception e) {

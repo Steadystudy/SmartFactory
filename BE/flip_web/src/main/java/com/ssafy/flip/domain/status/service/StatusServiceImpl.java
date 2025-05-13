@@ -117,13 +117,13 @@ public class StatusServiceImpl implements StatusService{
             if(amr.getMissionType().equals("MOVING"))
                 continue;
 
-            List<String> routeList = amr.getRouteList();
+            List<RouteDTO> routeList = amr.getRouteList();
 
             if (routeList != null && !routeList.isEmpty()) {
                 try {
                     System.out.println(routeList.getFirst());
-                    RouteDTO firstRoute = objectMapper.readValue(routeList.getFirst(), RouteDTO.class);
-                    LocalDateTime startedAt = LocalDateTime.parse(firstRoute.getStartedAt(), formatter);
+                    RouteDTO firstRoute = routeList.getFirst();
+                    LocalDateTime startedAt = LocalDateTime.parse(firstRoute.startedAt(), formatter);
 
                     LocalDateTime effectiveStartTime = startedAt.isBefore(targetTime) ? targetTime : startedAt;
 
