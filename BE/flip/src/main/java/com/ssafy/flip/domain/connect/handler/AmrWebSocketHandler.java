@@ -11,6 +11,7 @@ import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.log.service.mission.MissionLogService;
 import com.ssafy.flip.domain.mission.dto.MissionResponse;
 import com.ssafy.flip.domain.status.dto.request.AmrSaveRequestDTO;
+import com.ssafy.flip.domain.status.dto.request.LineSaveRequestDTO;
 import com.ssafy.flip.domain.status.service.StatusService;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
@@ -41,7 +42,6 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final WebSocketService webSocketService;
     private final StatusService statusService;
     private final MissionLogService missionLogService;
-    private final LineService lineService;
     private final AlgorithmTriggerProducer trigger;   // ← Kafka로 트리거
 
     private final Map<String, Integer> lastSubmissionMap = new ConcurrentHashMap<>();
@@ -63,6 +63,8 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
     private final ThreadPoolTaskExecutor amrTaskExecutor;
 
+    private final Map<String, Integer> missionToLine = new HashMap<>();
+
     @PostConstruct
     public void initObjectMapper() {
         objectMapper.registerModule(new JavaTimeModule());
@@ -71,8 +73,10 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     @PostConstruct
     public void initMissionMapping() {
         for(int i = 11; i <= 20; i++){
-            String missionId = "MISSION0"+i;
-            missionToLineId.put(missionId, (long) i);
+            missionToLine.put("MISSION0"+i, i-10);
+        }
+        for(int i = 31; i <= 40; i++){
+            missionToLine.put("MISSION0"+i, i-20);
         }
     }
 
@@ -216,6 +220,13 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 else {
                     String payload = objectMapper.writeValueAsString(amrDto);
                     trigger.run(payload);
+
+                    if(missionToLine.containsKey(missionId)) {
+                        statusService.saveLine(new LineSaveRequestDTO(
+                                missionToLine.get(missionId),
+                                25.0F,
+                                true));
+                    }
                 }
 
                 // 4) 임시 데이터 정리

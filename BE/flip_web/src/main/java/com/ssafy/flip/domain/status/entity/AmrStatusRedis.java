@@ -1,7 +1,7 @@
 package com.ssafy.flip.domain.status.entity;
 
-import com.ssafy.flip.domain.status.dto.request.RouteDTO;
-import com.ssafy.flip.domain.status.dto.request.SubmissionDTO;
+import com.ssafy.flip.domain.status.dto.response.RouteDTO;
+import com.ssafy.flip.domain.status.dto.response.SubmissionDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

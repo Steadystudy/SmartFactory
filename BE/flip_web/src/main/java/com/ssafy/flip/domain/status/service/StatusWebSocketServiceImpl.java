@@ -15,6 +15,7 @@ import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -100,8 +101,18 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
             if(ratio > 0) {
                 amount = (int) Math.min(maxAmount, Math.floor((1 - ratio) * maxAmount));
             }
+            if(amount < 0) amount = 0;
+
             amountMap.put(lineStatusRedis, amount);
         }
-        return amountMap;
+        return amountMap.entrySet()
+                .stream()
+                .sorted(Comparator.comparing(e -> e.getKey().getLineId()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (e1, e2) -> e1,
+                        LinkedHashMap::new
+                ));
     }
 }

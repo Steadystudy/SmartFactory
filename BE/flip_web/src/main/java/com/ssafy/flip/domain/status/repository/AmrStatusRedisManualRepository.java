@@ -2,8 +2,8 @@ package com.ssafy.flip.domain.status.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ssafy.flip.domain.status.dto.request.RouteDTO;
-import com.ssafy.flip.domain.status.dto.request.SubmissionDTO;
+import com.ssafy.flip.domain.status.dto.response.RouteDTO;
+import com.ssafy.flip.domain.status.dto.response.SubmissionDTO;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
