@@ -1,7 +1,6 @@
-package com.ssafy.flip.domain.log.repository;
+package com.ssafy.flip.domain.log.repository.missionlog;
 
 import com.ssafy.flip.domain.log.entity.MissionLog;
-import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
