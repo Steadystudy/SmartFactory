@@ -22,6 +22,8 @@ amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
 simulation_started = False
+REQUEST_DIST = 1.9
+MAX_WAIT_BEFORE_IGNORE = 10.0
 AMR_WS_URL = os.getenv("AMR_WS_URL","ws://localhost:8080/ws/amr")
 if not AMR_WS_URL:
     raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
@@ -116,19 +118,36 @@ def handle_mission_assign(data):
         if amr.id != target_amr_id:
             continue
 
-        # ✅ AMR이 IDLE 상태일 때만 미션을 수락
-        if amr.state == 1:  # 1 = IDLE
-            amr.current_mission_id = mission["missionId"]
-            amr.current_mission_type = mission["missionType"]
-            amr.assign_mission({
-                "missionId": mission["missionId"],
-                "missionType": mission["missionType"],
-                "submissions": mission["submissions"]
-            }, replace=True)
-            print(f"✅ {amr.id} 미션 수락 완료")
+        # 1. 동시성 방지용 락 걸고, 마지막 완료 sub ID 읽기
+        with LOCK:
+            last_done = amr.current_submission_id
+
+        # 2. 이미 완료한 서브미션(<= last_done) 은 건너뛰고
+        raw_subs = mission["submissions"]
+        if last_done is not None:
+            filtered_subs = [
+                sub for sub in raw_subs
+                if sub["submissionId"] > last_done
+            ]
         else:
-            print(f"🚫 {amr.id} 미션 무시 (현재 진행 중)")
+            filtered_subs = raw_subs
+
+        if not filtered_subs:
+            print(f"⚠️ {amr.id} 수행할 서브미션이 없습니다.")
+            return
+
+        # 3. 기존 미션 즉시 중단, 새로운 서브미션만 큐에 넣기
+        amr.current_mission_id   = mission["missionId"]
+        amr.current_mission_type = mission["missionType"]
+        amr.assign_mission({
+            "missionId":   mission["missionId"],
+            "missionType": mission["missionType"],
+            "submissions": filtered_subs
+        }, replace=True)
+
+        print(f"✅ {amr.id} 새 미션 수락 완료 (sub {filtered_subs[0]['submissionId']}부터 수행)")
         return
+
 
 
 def handle_mission_cancel(data):
@@ -153,7 +172,7 @@ def handle_traffic_permit(data):
     permit = data.get("body", {})
     node_id = permit.get("nodeId")
 
-    print(f"[DEBUG] {amr_id} got TRAFFIC_PERMIT for node {node_id} at env.now={env.now if 'env' in globals() else 'unknown'}")
+    # print(f"[DEBUG] {amr_id} got TRAFFIC_PERMIT for node {node_id} at env.now={env.now if 'env' in globals() else 'unknown'}")
 
 
     # amrId만으로 바로 처리
@@ -170,25 +189,6 @@ def handle_traffic_permit(data):
 
 
 
-def safe_send(ws, message, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            # 연결 상태 확인
-            if ws.sock and ws.sock.connected:
-                ws.send(json.dumps(message))
-                return True
-            else:
-                raise websocket.WebSocketConnectionClosedException()
-        except websocket.WebSocketConnectionClosedException:
-            print(f"[WARN] 소켓 닫힘, 재연결 시도 {attempt+1}/{max_retries}")
-            try:
-                # 재연결: 기존 ws 객체를 사용해 다시 여는 방법
-                ws.run_forever()
-                # — 또는 websocket.create_connection(ws.url) 로 새로 생성
-            except Exception as e:
-                print(f"[ERROR] 재연결 실패: {e}")
-    print("[ERROR] 최대 재시도 후에도 전송 실패")
-    return False
 # ---------- 교차 간선 계산 ----------
 def edges_intersect(p1, p2, q1, q2):
     def ccw(a, b, c):
@@ -216,31 +216,7 @@ def compute_intersecting_edges(map_data):
 
     return intersecting_edge_pairs
 
-def detect_deadlock_and_get_core_amr(threshold=4):
-    with LOCK:
-        blocked_amrs = []
-        for amr in amrs:
-            if amr.state != 2:
-                continue
-            if amr.is_blocked_by_leading_amr():
-                blocked_amrs.append((amr.id, SHARED_STATUS[amr.id]["timestamp"]))
 
-        if len(blocked_amrs) >= threshold:
-            blocked_amrs.sort(key=lambda x: x[1])
-            return blocked_amrs[0][0]  # 가장 오래된 AMR id
-    return None
-
-
-# ---------- 데드락 감지 루프 ----------
-def deadlock_monitor():
-    while True:
-        time.sleep(2)
-        core_amr_id = detect_deadlock_and_get_core_amr()
-        if core_amr_id:
-            print(f"🧩 데드락 감지됨! 중심 AMR: {core_amr_id}")
-            for amr in amrs:
-                if amr.id == core_amr_id:
-                    amr.env.process(amr.trigger_deadlock_avoidance())
 
 def start_simulation():
     global amrs  # ✅ 전역 변수 사용 선언!
@@ -272,7 +248,7 @@ def start_simulation():
 
     threading.Thread(target=broadcast_status, daemon=True).start()
     threading.Thread(target=lambda: env.run(), daemon=True).start()
-    threading.Thread(target=deadlock_monitor, daemon=True).start()
+
 
 # ---------- AMR 클래스 ----------
 class AMR:
@@ -290,7 +266,7 @@ class AMR:
         self.current_mission = None
         self.interrupt_flag = False
 
-        self.current_mission_id = None
+        self.current_mission_id = "DUMMY"
         self.current_mission_type = None
         self.current_submission_id = None
         self.current_speed = 0
@@ -301,6 +277,7 @@ class AMR:
         self.traffic_event = threading.Event()
         self.current_edge_id = None
         self.is_avoiding = False
+        self.permit_requested = False
 
     def update_status(self):
         with LOCK:
@@ -348,32 +325,48 @@ class AMR:
         self.current_mission_id = mission["missionId"]
         self.current_mission_type = mission["missionType"]
         self.update_status()
+        prev = self.map_data["nodes"][str(self.current_node_id)]
 
+        aborted = False
         for sub in mission["submissions"]:
+            if self.interrupt_flag:
+                # 중간 취소 감지
+                aborted = True
+                self.interrupt_flag = False
+                print(f"🚫 {self.id} 미션 중단 (sub {self.current_submission_id})")
+                break
+
+            # 다음 서브미션 실행
             self.current_submission_id = sub["submissionId"]
-
-            # ✅ 여기에 넣으세요
             self.current_edge_id = sub["edgeId"]
-
             node = self.map_data["nodes"][str(sub["nodeId"])]
             edge = self.map_data["edges"][str(sub["edgeId"])]
             self.current_speed = edge["speed"]
-            yield from self.move_to_node(node, edge)
 
-        # ✅ 미션 완료 후 초기화
-        self.state = 1
-        self.current_mission_id = None
-        self.current_mission_type = None
-        self.current_submission_id = None
-        self.current_edge_id = None
-        self.current_speed = 0
-        if self.current_mission_type == "LOADING":
-            self.loaded = True
-        elif self.current_mission_type == "UNLOADING":
-            self.loaded = False
+            yield from self.move_to_node(node, edge, prev)
+            prev = node
+        self.current_node_id = prev["id"]
         self.update_status()
 
-    def move_to_node(self, node, edge):
+        # ─── 완료/중단 후 초기화 ─────────────────────────────────────────
+        self.state = 1
+        # **취소(aborted)가 아닌 정상 완료일 때만 loaded 토글**
+        if not aborted:
+            if self.current_mission_type == "LOADING":
+                self.loaded = True
+            elif self.current_mission_type == "UNLOADING":
+                self.loaded = False
+
+        # 공통 초기화
+        # self.current_mission_id = None
+        # self.current_mission_type = None
+        self.current_submission_id = None
+        # self.current_edge_id = None
+        self.current_speed = 0
+        self.update_status()
+
+    def move_to_node(self, node, edge, prev):
+        self.collision_ignored = False
         distance = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
         speed = edge["speed"]
         duration = distance / speed
@@ -400,97 +393,141 @@ class AMR:
             self.update_status()
 
         self.dir = target_dir
+        self.current_node_id = prev["id"]
         self.update_status()
 
-        # 2. TRAFFIC_REQ 요청
+        # 2. TRAFFIC_REQ 요청 준비
         self.traffic_event.clear()
         self.waiting_for_traffic = (
             self.current_mission_id,
             self.current_submission_id,
             node["id"]
         )
+        # 아직 요청 전 상태로 초기화
+        self.permit_requested = False
+        # print(f"[DEBUG] {self.id} sent TRAFFIC_REQ for node {node['id']} at env.now={self.env.now}")
 
-        req_message = {
-            "header": {
-                "msgName": "TRAFFIC_REQ",
-                "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            },
-            "body": {
-                "missionId": self.current_mission_id,
-                "submissionId": self.current_submission_id,
-                "nodeId": node["id"],
-                "amrId": self.id
-            }
-        }
-        ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req_message))
-        print(f"[DEBUG] {self.id} sent TRAFFIC_REQ for node {node['id']} at env.now={self.env.now}")
+        # # 3. 이동
+        # for _ in range(steps):
+        #
+        #     # 정상 이동
+        #     yield self.env.timeout(REALTIME_INTERVAL)
+        #     self.pos_x += dx
+        #     self.pos_y += dy
+        #     self.battery -= 0.0001
+        #     if self.battery < 0:
+        #         self.battery = 0
+        #     self.update_status()
+        #
+        #     # PERMIT 확인
+        #     node_dist = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
+        #     if node_dist <= 1.2 and not self.traffic_event.is_set():
+        #         while not self.traffic_event.is_set():
+        #             yield self.env.timeout(REALTIME_INTERVAL)
 
-        # 3. 이동
+        # 3. 이동 및 충돌 회피 (이중 임계치 + 랜덤 백오프 + 허가 우선 + 최소 대기 시간)
+        STOP_DIST = 1.2
+        RESUME_DIST = 1.7
+        MIN_PAUSE_TIME = 0.3  # 재개 후 최소 0.2초 감지 skip
+
         for _ in range(steps):
-            # 🔴 정면 충돌 감지 시 회피 시작
-            if self.is_head_on_collision():
-                # 회피 조건 판단
-                with LOCK:
-                    # 회피를 이미 수행 중이면 스킵
-                    if self.is_avoiding:
-                        continue
-
-                    # 회피 주체 판단: timestamp 기준 빠른 쪽이 회피함
-                    for other_id, other in SHARED_STATUS.items():
-                        if other_id == self.id:
-                            continue
-                        if other.get("currentEdge") == self.current_edge_id:
-                            dir_diff = abs((self.dir - other["dir"] + 360) % 360)
-                            dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
-                            if 150 < dir_diff < 210 and dist < 1.2:
-                                if SHARED_STATUS[self.id]["timestamp"] < other["timestamp"]:
-                                    print(f"⚠️ {self.id} 정면 충돌 → 회피 시작")
-                                    yield from self.avoid_and_recover(dx, dy, speed, target_dir)
-                                else:
-                                    print(f"🛑 {self.id} 정면 충돌 감지 → 대기")
-                                    while self.is_head_on_collision():
-                                        yield self.env.timeout(REALTIME_INTERVAL)
-                continue
-
-            # 🟠 교차 충돌 감지 시 대기 or 회피
-            conflict_action = self.is_intersection_conflict(INTERSECTING_EDGE_PAIRS)
-            if conflict_action == "wait":
-                print(f"🛑 {self.id} 교차점 충돌 감지 - 정지 대기")
-                yield from self.wait_until_clear(INTERSECTING_EDGE_PAIRS)
-            elif conflict_action == "avoid":
-                print(f"⚠️ {self.id} 교차점 충돌 감지 - 회피 기동 시작")
-                yield from self.avoid_and_recover(dx, dy, speed, target_dir)
-                continue
-
-            if self.is_blocked_by_leading_amr():
-                print(f"🟡 {self.id} 앞 차량 정지 감지 → 대기 중")
-                while self.is_blocked_by_leading_amr():
-                    yield self.env.timeout(REALTIME_INTERVAL)
-                print(f"🟢 {self.id} 앞 차량 출발 감지 → 재이동 시작")
-
-            # 정상 이동
+            # 3-1. 위치 업데이트
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
             self.pos_y += dy
-            self.battery -= 0.0001
-            if self.battery < 0:
-                self.battery = 0
+            self.battery = max(0, self.battery - 0.0001)
             self.update_status()
 
-            # PERMIT 확인
-            angle_rad_dir = math.radians((90 - self.dir) % 360)
-            front_x = self.pos_x + math.cos(angle_rad_dir) * 0.6
-            front_y = self.pos_y + math.sin(angle_rad_dir) * 0.6
-            front_dist = self.get_distance(front_x, front_y, node["x"], node["y"])
+            # 3-2. 도착 1.9m 전이면 한 번만 TRAFFIC_REQ 보내기
+            node_dist = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
 
-            if front_dist <= 0.1 and not self.traffic_event.is_set():
+            if not self.permit_requested and node_dist <= REQUEST_DIST:
+                req_message = {
+                    "header": {
+                        "msgName": "TRAFFIC_REQ",
+                        "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                    },
+                    "body": {
+                        "missionId": self.current_mission_id,
+                        "submissionId": self.current_submission_id,
+                        "nodeId": node["id"],
+                        "amrId": self.id
+                    }
+                }
+                ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req_message))
+                self.permit_requested = True
+
+            # 3-2. 충돌 감지
+            if not self.collision_ignored:
+                waiting_node = self.waiting_for_traffic[2] if self.waiting_for_traffic else None
+                for other_id, other_status in SHARED_STATUS.items():
+                    if other_id == self.id:
+                        continue
+                    # ❶ 이미 허가받은 내 AMR은 무시
+                    if waiting_node and NODE_RESERVATIONS.get(waiting_node) == self.id:
+                        break
+
+                    # ❷ 대기·도킹 중인 AMR은 건너뛴다
+                    if other_status["state"] != 2:
+                        continue
+
+                    vx, vy = other_status["x"] - self.pos_x, other_status["y"] - self.pos_y
+                    dist = math.hypot(vx, vy)
+                    if dist > STOP_DIST:
+                        continue
+
+                    # 뒤쪽 AMR 무시
+                    dot = dx * vx + dy * vy
+                    if dot <= 0:
+                        continue
+
+                    # ±60° 이내
+                    cos_a = max(-1.0, min(1.0, dot / (math.hypot(dx, dy) * dist)))
+                    angle = math.degrees(math.acos(cos_a))
+                    if angle > 60:
+                        continue
+
+                    # → 멈춤 & 랜덤 백오프
+                    print(f"⛔ {self.id} stopping: {other_id} at {dist:.2f}m, angle {angle:.1f}°")
+                    backoff = random.uniform(0, 0.2)
+                    print(f"⏳ {self.id} backing off {backoff:.2f}s")
+
+                    yield self.env.timeout(backoff)
+                    pause_start = self.env.now
+
+                    # 최소 대기 시간 설정
+                    resume_deadline = self.env.now + MIN_PAUSE_TIME
+
+                    # RESUME_DIST 이상 & 최소 대기 시간 경과 후 재개
+                    while True:
+                        yield self.env.timeout(REALTIME_INTERVAL)
+                        # 1) 최소 대기 시간 확보
+                        if self.env.now < resume_deadline:
+                            continue
+                        if self.env.now - pause_start >= MAX_WAIT_BEFORE_IGNORE:
+                            print(f"⚠️ {self.id} waited {MAX_WAIT_BEFORE_IGNORE}s, ignoring collision with {other_id}")
+                            self.collision_ignored = True
+                            break
+                        s = SHARED_STATUS.get(other_id)
+                        if not s:
+                            break
+                        new_dist = math.hypot(s["x"] - self.pos_x, s["y"] - self.pos_y)
+                        if new_dist >= RESUME_DIST:
+                            print(f"✅ {self.id} resuming: {other_id} now {new_dist:.2f}m away")
+                            break
+
+                    break  # 다음 스텝부터 다시 이동
+
+            # 3-3. TRAFFIC_PERMIT 확인 (원래 로직)
+            node_dist = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
+            if node_dist <= 1.2 and not self.traffic_event.is_set():
                 while not self.traffic_event.is_set():
                     yield self.env.timeout(REALTIME_INTERVAL)
 
         # 4. 위치 정렬
         self.pos_x = node["x"]
         self.pos_y = node["y"]
-        self.current_node_id = node["id"]
+        # self.current_node_id = node["id"]
         self.update_status()
 
         # 5. 노드 방향 회전 처리 (charging, docking 등)
@@ -536,140 +573,9 @@ class AMR:
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
-    def is_head_on_collision(self):
-        with LOCK:  # 🔐 상태 정보는 LOCK으로 보호된 SHARED_STATUS에서 확인
-            for other_id, other in SHARED_STATUS.items():
-                if other_id == self.id:
-                    continue  # 자기 자신은 제외
 
-                # ✅ 같은 edge 위에 있는가?
-                if other.get("currentEdge") != self.current_edge_id or self.current_edge_id is None:
-                    continue
 
-                # ✅ 두 AMR의 거리 확인
-                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
-                if dist > 1.2:
-                    continue
 
-                # ✅ 방향이 서로 반대인지 확인 (180도 ±30도)
-                dir_diff = abs((self.dir - other["dir"] + 360) % 360)
-                if 150 < dir_diff < 210:
-                    print(f"⚠️ 정면 충돌 감지: {self.id} vs {other['id']} (거리: {dist:.2f}, 각도차: {dir_diff:.1f})")
-                    return True
-
-        return False
-
-    def is_intersection_conflict(self, intersecting_edge_pairs, conflict_distance=2):
-        with LOCK:
-            for other_id, other in SHARED_STATUS.items():
-                if other_id == self.id:
-                    continue
-                if (self.current_edge_id, other.get("currentEdge")) not in intersecting_edge_pairs:
-                    continue
-
-                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
-                if dist < conflict_distance:
-                    # 내가 늦게 진입했으면 대기 (회피 안 함)
-                    if SHARED_STATUS[self.id]["timestamp"] > other["timestamp"]:
-                        return "wait"
-                    else:
-                        return "avoid"
-        return None
-
-    def is_blocked_by_leading_amr(self):
-        with LOCK:
-            for other_id, other in SHARED_STATUS.items():
-                if other_id == self.id:
-                    continue
-
-                if other.get("currentEdge") != self.current_edge_id:
-                    continue
-
-                # 거리 계산
-                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
-                if dist > 1.5:  # 너무 멀면 무시
-                    continue
-
-                # 내 앞에 있고 같은 방향이면
-                angle_to_other = math.degrees(math.atan2(other["y"] - self.pos_y, other["x"] - self.pos_x)) % 360
-                my_dir_std = (90 - self.dir) % 360
-                angle_diff = abs((angle_to_other - my_dir_std + 360) % 360)
-
-                if angle_diff < 60:  # 60도 이내 → 정면
-                    if other["speed"] < 0.01:  # 정지 상태
-                        return True
-        return False
-
-    def wait_until_clear(self, intersecting_edge_pairs):
-        while self.is_intersection_conflict(intersecting_edge_pairs) == "wait":
-            yield self.env.timeout(REALTIME_INTERVAL)
-
-    def avoid_and_recover(self, dx, dy, speed, target_dir):
-        self.is_avoiding = True
-        offset_x, offset_y = self.get_offset_position(self.pos_x, self.pos_y, offset=0.6)
-        offset_dx = offset_x - self.pos_x
-        offset_dy = offset_y - self.pos_y
-
-        offset_angle_rad = math.atan2(offset_dy, offset_dx)
-        self.dir = (90 - math.degrees(offset_angle_rad)) % 360
-        self.update_status()
-
-        offset_steps = int(
-            self.get_distance(self.pos_x, self.pos_y, offset_x, offset_y) / (speed * REALTIME_INTERVAL))
-        for _ in range(offset_steps):
-            yield self.env.timeout(REALTIME_INTERVAL)
-            self.pos_x += offset_dx / offset_steps
-            self.pos_y += offset_dy / offset_steps
-            self.update_status()
-
-        while self.is_intersection_conflict(INTERSECTING_EDGE_PAIRS) == "avoid":
-            yield self.env.timeout(REALTIME_INTERVAL)
-
-        self.is_avoiding = False
-        self.dir = target_dir
-        self.update_status()
-
-    def trigger_deadlock_avoidance(self):
-        if self.is_avoiding:
-            return
-
-        self.is_avoiding = True
-        print(f"↩️ {self.id} 데드락 회피 시작")
-
-        angle_rad = math.radians((90 - self.dir) % 360)
-        offset_angle = angle_rad + math.pi / 2
-        target_x = self.pos_x + math.cos(offset_angle) * 1.0
-        target_y = self.pos_y + math.sin(offset_angle) * 1.0
-
-        dx = target_x - self.pos_x
-        dy = target_y - self.pos_y
-        steps = int(
-            self.get_distance(self.pos_x, self.pos_y, target_x, target_y) / (self.current_speed * REALTIME_INTERVAL))
-
-        for _ in range(steps):
-            yield self.env.timeout(REALTIME_INTERVAL)
-            self.pos_x += dx / steps
-            self.pos_y += dy / steps
-            self.update_status()
-
-        while detect_deadlock_and_get_core_amr() is not None:
-            yield self.env.timeout(REALTIME_INTERVAL)
-
-        for _ in range(steps):
-            yield self.env.timeout(REALTIME_INTERVAL)
-            self.pos_x -= dx / steps
-            self.pos_y -= dy / steps
-            self.update_status()
-
-        self.is_avoiding = False
-        print(f"✅ {self.id} 데드락 회피 완료")
-
-    def get_offset_position(self, x, y, offset=0.6):
-        angle_rad = math.radians((90 - self.dir) % 360)
-        offset_angle = angle_rad - math.pi / 2  # 오른쪽 기준
-        offset_x = x + math.cos(offset_angle) * offset
-        offset_y = y + math.sin(offset_angle) * offset
-        return offset_x, offset_y
 
 
 # ---------- AMR 초기화 ----------
@@ -677,17 +583,32 @@ def setup_amrs(env, map_data):
     amrs = []
 
     amr_start_positions = [
-        (0.5, 10.5), (0.5, 12.5), (0.5, 14.5), (0.5, 16.5),
-        (0.5, 32.5), (0.5, 34.5), (0.5, 36.5), (0.5, 42.5),
-        (0.5, 44.5), (0.5, 46.5), (0.5, 48.5), (0.5, 63.5),
-        (0.5, 65.5), (0.5, 67.5), (0.5, 69.5), (3.5, 10.5),
-        (3.5, 12.5), (3.5, 16.5), (3.5, 32.5), (3.5, 34.5)
+        (115, 7.5, 6.5),
+        (103, 21.5, 3.5),
+        (106, 36.5, 3.5),
+        (109, 47.5, 3.5),
+        (112, 62.5, 3.5),
+        (132, 76.5, 6.5),
+        (133, 7.5, 38.5),
+        (136, 16.5, 38.5),
+        (140, 36.5, 38.5),
+        (143, 47.5, 38.5),
+        (147, 67.5, 38.5),
+        (150, 76.5, 38.5),
+        (169, 7.5, 73.5),
+        (189, 21.5, 76.5),
+        (192, 36.5, 76.5),
+        (195, 47.5, 76.5),
+        (198, 62.5, 76.5),
+        (186, 76.5, 73.5),
+        (65, 0.5, 32.5),
+        (71, 0.5, 48.5),
     ]
 
-    for i, (x, y) in enumerate(amr_start_positions):
+    for i, (n, x, y) in enumerate(amr_start_positions):
         amr_id = f"AMR{str(i + 1).zfill(3)}"
         amr_type = 0 if i < 10 else 1  # 0번~9번 → type=0, 10번~19번 → type=1
-        amr = AMR(env, amr_id, map_data, x, y, amr_type, i+61)
+        amr = AMR(env, amr_id, map_data, x, y, amr_type, n)
         amr.update_status()
         env.process(amr.run())
         amrs.append(amr)
@@ -731,7 +652,8 @@ def broadcast_status():
 
                     if i < len(ws_clients):
                         try:
-                            print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']} currentNode: {message['body']['currentNode']}")
+                            if message['body']['amrId']=="AMR016":
+                                print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
                             ws_clients[i].send(json.dumps(message))
                         except Exception as e:
                             print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
@@ -743,8 +665,6 @@ def broadcast_status():
         except Exception as global_exception:
             print(f"❌ [BROADCAST] 스레드가 종료되었습니다: {global_exception}")
             time.sleep(1)  # 잠시 대기 후 재시작
-
-
 
 
 # ---------- 메인 ----------
