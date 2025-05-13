@@ -32,10 +32,9 @@ export const VisualizationPanel = () => {
     <div className='flex-shrink-0 w-[calc(75%-80px)] p-4 h-dvh'>
       <div className='h-full'>
         <Tabs defaultValue='3d' className='w-full h-full'>
-          <TabsList className='grid w-full grid-cols-3 cursor-pointer bg-white/10'>
-            <TabsTrigger value='3d'>3D View</TabsTrigger>
-            <TabsTrigger value='2d'>2D View</TabsTrigger>
-            <TabsTrigger value='heatmap'>Heatmap</TabsTrigger>
+          <TabsList className='grid w-full grid-cols-2 cursor-pointer bg-white/10'>
+            <TabsTrigger value='3d'>공장 전체 View</TabsTrigger>
+            <TabsTrigger value='2d'>Top View</TabsTrigger>
           </TabsList>
           <div className='h-full mt-4 cursor-grab'>
             <Suspense fallback={<Loading />}>
