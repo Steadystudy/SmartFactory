@@ -16,4 +16,16 @@ export type AMR_CARD_STATUS = Pick<
   | 'targetY'
   | 'expectedArrival'
   | 'startedAt'
+  | 'battery'
 >;
+
+export type FACILITY_CARD_STATUS = {
+  lineId: number;
+  amount: number;
+  status: boolean;
+};
+
+export type FACILITY_LINE_STATUS = {
+  lineList: FACILITY_CARD_STATUS[];
+  timestamp: string;
+};
