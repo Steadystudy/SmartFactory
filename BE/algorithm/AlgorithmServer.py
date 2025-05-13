@@ -40,18 +40,21 @@ def fetch_line_status() -> list[tuple[int, float]]:
     for node in range(11, 51):
         key = f"MISSION_PT:{node}"
         if r.exists(key):
-            ts_str = r.get(key)
-            if ts_str==-1:
+            ts_raw = r.get(key)
+            ts_str = ts_raw.decode() if isinstance(ts_raw, bytes) else str(ts_raw)
+            ts_str = ts_str.strip('"')  # 큰따옴표 제거
+
+            if ts_str == "-1" or to_str == -1:
                 continue
-            else:
-                try:
-                    ts = datetime.fromisoformat(ts_str)
-                    elapsed = (now - ts).total_seconds()
-                    if 11<=node<=20 or 31<=node<=40:
-                        elapsed += api.loadingTimeTable[(node-1)%10+1][node]
-                    line_status.append((node, elapsed))
-                except Exception as e:
-                    print(f"⚠️ {key} 값 변환 실패: {ts_str} ({e})")
+
+            try:
+                ts = datetime.fromisoformat(ts_str)
+                elapsed = (now - ts).total_seconds()
+                if 11 <= node <= 20 or 31 <= node <= 40:
+                    elapsed += api.loadingTimeTable[(node - 1) % 10 + 1][node]
+                line_status.append((node, elapsed))
+            except Exception as e:
+                print(f"⚠️ {key} 값 변환 실패: {ts_str} ({e})")
     return line_status
 
 
