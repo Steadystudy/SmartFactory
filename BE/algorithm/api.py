@@ -210,7 +210,7 @@ def hungarian(robotList, taskList):
             # 스케줄 기록
             LoadingStartTime[best_p].append(best_start)
 
-            #print(f"📦 로봇 {robot_name} → 포트 {best_p} "f"({best_start}s 적재 시작, {best_ready}s 대기)")
+            print(f"📦 로봇 {robot_name} → 포트 {best_p} "f"({best_start}s 적재 시작, {best_ready}s 대기)")
 
             to_pickup, c1 = aStar(start_node, best_p)
             to_dest,   c2 = aStar(best_p, dest, c1+EXTRA_PICKUP_COST)
@@ -234,7 +234,7 @@ def hungarian(robotList, taskList):
         # print(f"🛣️ 경로: {[(n, t) for n, t in final_path]}")
         # print(f"🦾 로봇{robot_name} {start_node} → {dest} | 총 A* 비용: {total_cost:.2f} | 점수 {score}")
 
-    print(f"\n✅ 총 거리 비용: {total:.2f}")
+    #print(f"\n✅ 총 거리 비용: {total:.2f}")
     return [(robotList[i], taskList[j],missions[dest],aStarResult[i][0], aStarResult[i][1])
             for i, j in zip(row_ind, col_ind)], total
 
