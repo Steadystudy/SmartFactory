@@ -22,8 +22,6 @@ amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
 simulation_started = False
-REQUEST_DIST = 1.9
-MAX_WAIT_BEFORE_IGNORE = 10.0
 AMR_WS_URL = os.getenv("AMR_WS_URL","ws://localhost:8080/ws/amr")
 if not AMR_WS_URL:
     raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
@@ -356,11 +354,12 @@ class AMR:
                 self.loaded = True
             elif self.current_mission_type == "UNLOADING":
                 self.loaded = False
+            self.current_submission_id = None
 
         # 공통 초기화
         # self.current_mission_id = None
         # self.current_mission_type = None
-        self.current_submission_id = None
+
         # self.current_edge_id = None
         self.current_speed = 0
         self.update_status()
@@ -573,9 +572,140 @@ class AMR:
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
+    def is_head_on_collision(self):
+        with LOCK:  # 🔐 상태 정보는 LOCK으로 보호된 SHARED_STATUS에서 확인
+            for other_id, other in SHARED_STATUS.items():
+                if other_id == self.id:
+                    continue  # 자기 자신은 제외
 
+                # ✅ 같은 edge 위에 있는가?
+                if other.get("currentEdge") != self.current_edge_id or self.current_edge_id is None:
+                    continue
 
+                # ✅ 두 AMR의 거리 확인
+                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                if dist > 1.2:
+                    continue
 
+                # ✅ 방향이 서로 반대인지 확인 (180도 ±30도)
+                dir_diff = abs((self.dir - other["dir"] + 360) % 360)
+                if 150 < dir_diff < 210:
+                    print(f"⚠️ 정면 충돌 감지: {self.id} vs {other['id']} (거리: {dist:.2f}, 각도차: {dir_diff:.1f})")
+                    return True
+
+        return False
+
+    def is_intersection_conflict(self, intersecting_edge_pairs, conflict_distance=2):
+        with LOCK:
+            for other_id, other in SHARED_STATUS.items():
+                if other_id == self.id:
+                    continue
+                if (self.current_edge_id, other.get("currentEdge")) not in intersecting_edge_pairs:
+                    continue
+
+                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                if dist < conflict_distance:
+                    # 내가 늦게 진입했으면 대기 (회피 안 함)
+                    if SHARED_STATUS[self.id]["timestamp"] > other["timestamp"]:
+                        return "wait"
+                    else:
+                        return "avoid"
+        return None
+
+    def is_blocked_by_leading_amr(self):
+        with LOCK:
+            for other_id, other in SHARED_STATUS.items():
+                if other_id == self.id:
+                    continue
+
+                if other.get("currentEdge") != self.current_edge_id:
+                    continue
+
+                # 거리 계산
+                dist = self.get_distance(self.pos_x, self.pos_y, other["x"], other["y"])
+                if dist > 1.5:  # 너무 멀면 무시
+                    continue
+
+                # 내 앞에 있고 같은 방향이면
+                angle_to_other = math.degrees(math.atan2(other["y"] - self.pos_y, other["x"] - self.pos_x)) % 360
+                my_dir_std = (90 - self.dir) % 360
+                angle_diff = abs((angle_to_other - my_dir_std + 360) % 360)
+
+                if angle_diff < 60:  # 60도 이내 → 정면
+                    if other["speed"] < 0.01:  # 정지 상태
+                        return True
+        return False
+
+    def wait_until_clear(self, intersecting_edge_pairs):
+        while self.is_intersection_conflict(intersecting_edge_pairs) == "wait":
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+    def avoid_and_recover(self, dx, dy, speed, target_dir):
+        self.is_avoiding = True
+        offset_x, offset_y = self.get_offset_position(self.pos_x, self.pos_y, offset=0.6)
+        offset_dx = offset_x - self.pos_x
+        offset_dy = offset_y - self.pos_y
+
+        offset_angle_rad = math.atan2(offset_dy, offset_dx)
+        self.dir = (90 - math.degrees(offset_angle_rad)) % 360
+        self.update_status()
+
+        offset_steps = int(
+            self.get_distance(self.pos_x, self.pos_y, offset_x, offset_y) / (speed * REALTIME_INTERVAL))
+        for _ in range(offset_steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x += offset_dx / offset_steps
+            self.pos_y += offset_dy / offset_steps
+            self.update_status()
+
+        while self.is_intersection_conflict(INTERSECTING_EDGE_PAIRS) == "avoid":
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+        self.is_avoiding = False
+        self.dir = target_dir
+        self.update_status()
+
+    def trigger_deadlock_avoidance(self):
+        if self.is_avoiding:
+            return
+
+        self.is_avoiding = True
+        print(f"↩️ {self.id} 데드락 회피 시작")
+
+        angle_rad = math.radians((90 - self.dir) % 360)
+        offset_angle = angle_rad + math.pi / 2
+        target_x = self.pos_x + math.cos(offset_angle) * 1.0
+        target_y = self.pos_y + math.sin(offset_angle) * 1.0
+
+        dx = target_x - self.pos_x
+        dy = target_y - self.pos_y
+        steps = int(
+            self.get_distance(self.pos_x, self.pos_y, target_x, target_y) / (self.current_speed * REALTIME_INTERVAL))
+
+        for _ in range(steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x += dx / steps
+            self.pos_y += dy / steps
+            self.update_status()
+
+        while detect_deadlock_and_get_core_amr() is not None:
+            yield self.env.timeout(REALTIME_INTERVAL)
+
+        for _ in range(steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x -= dx / steps
+            self.pos_y -= dy / steps
+            self.update_status()
+
+        self.is_avoiding = False
+        print(f"✅ {self.id} 데드락 회피 완료")
+
+    def get_offset_position(self, x, y, offset=0.6):
+        angle_rad = math.radians((90 - self.dir) % 360)
+        offset_angle = angle_rad - math.pi / 2  # 오른쪽 기준
+        offset_x = x + math.cos(offset_angle) * offset
+        offset_y = y + math.sin(offset_angle) * offset
+        return offset_x, offset_y
 
 
 # ---------- AMR 초기화 ----------
@@ -652,8 +782,8 @@ def broadcast_status():
 
                     if i < len(ws_clients):
                         try:
-                            if message['body']['amrId']=="AMR016":
-                                print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
+                            # if message['body']['amrId']=="AMR016":
+                                # print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
                             ws_clients[i].send(json.dumps(message))
                         except Exception as e:
                             print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
