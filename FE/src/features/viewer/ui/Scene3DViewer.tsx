@@ -67,7 +67,7 @@ const Scene3DViewer = () => {
     <>
       <MapLoading />
       <Suspense fallback={null}>
-        <Canvas camera={{ position: [40, 40, 40], fov: 60 }}>
+        <Canvas camera={{ position: [60, 50, 60], fov: 60 }}>
           <Map3D />
           <Warehouse />
         </Canvas>
