@@ -237,7 +237,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
                     // missionType을 UNLOADING으로 덮어쓰기
                     String amrKey = "AMR_STATUS:" + amrDto.body().amrId();
-                    stringRedisTemplate.opsForHash().put(amrKey, "missionType", "UNLOADING");
+                    stringRedisTemplate.opsForHash().put(amrKey, "missionType", "LOADING");
                     stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "");
 
                     trigger.run(payload);
