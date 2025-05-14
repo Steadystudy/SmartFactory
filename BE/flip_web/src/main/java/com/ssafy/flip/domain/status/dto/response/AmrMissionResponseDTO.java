@@ -22,22 +22,31 @@ public record AmrMissionResponseDTO(
     LocalDateTime startedAt
 ) {
     public static AmrMissionResponseDTO from(AmrStatusRedis amrStatusRedis, AmrMissionDTO missionDTO) {
+        int submissionId = amrStatusRedis.getSubmissionId();
+        boolean isSubmissionIdInvalid = (submissionId == 0);
+
+        float startX = isSubmissionIdInvalid ? 0F : missionDTO.startX();
+        float startY = isSubmissionIdInvalid ? 0F : missionDTO.startY();
+        float targetX = isSubmissionIdInvalid ? 0F : missionDTO.targetX();
+        float targetY = isSubmissionIdInvalid ? 0F : missionDTO.targetY();
+
         return new AmrMissionResponseDTO(
                 amrStatusRedis.getAmrId(),
-                amrStatusRedis.getState(), // state가 String이라 변환 필요
-                amrStatusRedis.getMissionId(),      // missionId도 String이어서 변환 필요
-                amrStatusRedis.getMissionType(),
-                amrStatusRedis.getSubmissionId(),
-                amrStatusRedis.getErrorList(),                      // errorList가 그냥 String
-                LocalDateTime.now(),
-                amrStatusRedis.getBattery(),                           // timestamp는 현재 시간
+                amrStatusRedis.getState(),
+                amrStatusRedis.getMissionId(),
                 missionDTO.type(),
-                missionDTO.startX(),
-                missionDTO.startY(),
-                missionDTO.targetX(),
-                missionDTO.targetY(),
+                submissionId,
+                amrStatusRedis.getErrorList(),
+                LocalDateTime.now(),
+                amrStatusRedis.getBattery(),
+                amrStatusRedis.getType(),
+                startX,
+                startY,
+                targetX,
+                targetY,
                 missionDTO.expectedArrival(),
                 missionDTO.startedAt()
         );
     }
+
 }

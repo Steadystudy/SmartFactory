@@ -72,6 +72,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                     }
                     return AmrMissionResponseDTO.from(status, missionDTO);
                 })
+                .sorted(Comparator.comparing(AmrMissionResponseDTO::amrId))
                 .toList();
 
         messagingTemplate.convertAndSend("/amr/mission", amrMissionResponseDTOS);
