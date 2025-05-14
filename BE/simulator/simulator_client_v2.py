@@ -22,6 +22,8 @@ amrs = []  # <- 전역 AMR 리스트
 INTERSECTING_EDGE_PAIRS = set()
 NODE_RESERVATIONS = {}
 simulation_started = False
+REQUEST_DIST = 1.9
+MAX_WAIT_BEFORE_IGNORE = 10.0
 AMR_WS_URL = os.getenv("AMR_WS_URL","ws://localhost:8080/ws/amr")
 if not AMR_WS_URL:
     raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
@@ -38,7 +40,7 @@ def on_message(ws, message):
     try:
         data = json.loads(message)
         msg_name = data.get("header", {}).get("msgName")
-        print(f"▶ PARSED msgName={repr(msg_name)}")  # ← 추가
+        # print(f"▶ PARSED msgName={repr(msg_name)}")  # ← 추가
 
         if   msg_name == "MAP_INFO":
             handle_map_info(data, ws)
@@ -103,8 +105,8 @@ def handle_map_info(data, ws):
 
         print("✅ 맵 저장 완료! 시뮬레이션 시작")
         start_simulation()
-    else:
-        print("⚠️ 시뮬레이션 이미 시작됨, 재시작 생략")
+    # else:
+    #     print("⚠️ 시뮬레이션 이미 시작됨, 재시작 생략")
 
 
 def handle_mission_assign(data):
@@ -131,7 +133,7 @@ def handle_mission_assign(data):
             filtered_subs = raw_subs
 
         if not filtered_subs:
-            print(f"⚠️ {amr.id} 수행할 서브미션이 없습니다.")
+            # print(f"⚠️ {amr.id} 수행할 서브미션이 없습니다.")
             return
 
         # 3. 기존 미션 즉시 중단, 새로운 서브미션만 큐에 넣기
@@ -154,8 +156,9 @@ def handle_mission_cancel(data):
 
     for amr in amrs:
         if amr.id == target_amr_id:
-            # 플래그만 세우고 미션큐는 유지
             amr.interrupt_flag = True
+            amr.mission_queue.clear()
+            amr.current_speed=0
             return
 
 # ---------- 메시지 처리 함수 ----------
@@ -170,7 +173,7 @@ def handle_traffic_permit(data):
     permit = data.get("body", {})
     node_id = permit.get("nodeId")
 
-    print(f"[DEBUG] {amr_id} got TRAFFIC_PERMIT for node {node_id} at env.now={env.now if 'env' in globals() else 'unknown'}")
+    # print(f"[DEBUG] {amr_id} got TRAFFIC_PERMIT for node {node_id} at env.now={env.now if 'env' in globals() else 'unknown'}")
 
 
     # amrId만으로 바로 처리
@@ -180,7 +183,7 @@ def handle_traffic_permit(data):
 
         with LOCK:
             NODE_RESERVATIONS[node_id] = amr.id
-            print(f"✅ {amr.id} 노드 {node_id} 접근 예약됨")
+            # print(f"✅ {amr.id} 노드 {node_id} 접근 예약됨")
 
         amr.traffic_event.set()
         break
@@ -264,7 +267,7 @@ class AMR:
         self.current_mission = None
         self.interrupt_flag = False
 
-        self.current_mission_id = None
+        self.current_mission_id = "DUMMY"
         self.current_mission_type = None
         self.current_submission_id = None
         self.current_speed = 0
@@ -275,6 +278,7 @@ class AMR:
         self.traffic_event = threading.Event()
         self.current_edge_id = None
         self.is_avoiding = False
+        self.permit_requested = False
 
     def update_status(self):
         with LOCK:
@@ -330,7 +334,7 @@ class AMR:
                 # 중간 취소 감지
                 aborted = True
                 self.interrupt_flag = False
-                print(f"🚫 {self.id} 미션 중단 (sub {self.current_submission_id})")
+                # print(f"🚫 {self.id} 미션 중단 (sub {self.current_submission_id})")
                 break
 
             # 다음 서브미션 실행
@@ -346,39 +350,50 @@ class AMR:
         self.update_status()
 
         # ─── 완료/중단 후 초기화 ─────────────────────────────────────────
-        self.state = 1
+
         # **취소(aborted)가 아닌 정상 완료일 때만 loaded 토글**
-        if not aborted:
-            if self.current_mission_type == "LOADING":
-                self.loaded = True
-            elif self.current_mission_type == "UNLOADING":
-                self.loaded = False
+        if aborted:
+            self.current_speed=0
+            self.update_status()
+            return
+
+        self.state = 1
+        if self.current_mission_type == "LOADING":
+            self.loaded = True
+        elif self.current_mission_type == "UNLOADING":
+            self.loaded = False
+        self.current_submission_id = None
 
         # 공통 초기화
         # self.current_mission_id = None
         # self.current_mission_type = None
-        self.current_submission_id = None
         # self.current_edge_id = None
         self.current_speed = 0
         self.update_status()
 
     def move_to_node(self, node, edge, prev):
+        # ─── 상수 정의 ─────────────────────────────────────
+        STOP_DIST = 1.2
+        RESUME_DIST = 1.7
+        MIN_PAUSE_TIME = 0.3
+        REQUEST_DIST = 1.9
+        MAX_WAIT_BEFORE_IGNORE = 10.0
+
+        # ─── 직선 이동 계산 ─────────────────────────────────
         distance = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
         speed = edge["speed"]
         duration = distance / speed
         steps = max(1, int(duration / REALTIME_INTERVAL))
         dx = (node["x"] - self.pos_x) / steps
         dy = (node["y"] - self.pos_y) / steps
+        per_step_dist = speed * REALTIME_INTERVAL  # 한 스텝당 전진 거리
 
-        # 1. 방향 계산
+        # ─── 회전 정렬 ─────────────────────────────────────
         angle_rad = math.atan2(dy, dx)
         angle_std = math.degrees(angle_rad) % 360
         target_dir = (90 - angle_std) % 360
-
         diff = (target_dir - self.dir + 360) % 360
-        if diff > 180:
-            diff -= 360
-
+        if diff > 180: diff -= 360
         turn_speed = 360 / 3
         turn_per_step = turn_speed * REALTIME_INTERVAL
         steps_to_turn = int(abs(diff) / turn_per_step)
@@ -387,51 +402,154 @@ class AMR:
             yield self.env.timeout(REALTIME_INTERVAL)
             self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
             self.update_status()
-
         self.dir = target_dir
         self.current_node_id = prev["id"]
         self.update_status()
 
-
-
-        # 2. TRAFFIC_REQ 요청
+        # ─── TRAFFIC_REQ 준비 ───────────────────────────────
         self.traffic_event.clear()
         self.waiting_for_traffic = (
             self.current_mission_id,
             self.current_submission_id,
             node["id"]
         )
+        self.permit_requested = False
+        self.collision_ignored = False
 
-        req_message = {
-            "header": {
-                "msgName": "TRAFFIC_REQ",
-                "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            },
-            "body": {
-                "missionId": self.current_mission_id,
-                "submissionId": self.current_submission_id,
-                "nodeId": node["id"],
-                "amrId": self.id
-            }
-        }
-        ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req_message))
-        print(f"[DEBUG] {self.id} sent TRAFFIC_REQ for node {node['id']} at env.now={self.env.now}")
+        # ─── 회피 및 복귀 변수 초기화 ────────────────────────
+        avoidance_steps = 0
+        avoidance_steps_orig = 0
+        avoidance_dx = avoidance_dy = 0.0
+        return_steps = 0
+        return_dx = return_dy = 0.0
 
-        # 3. 이동
-        for _ in range(steps):
-
-            # 정상 이동
+        # ─── 이동 + 회피 루프 ────────────────────────────────
+        for step_idx in range(steps):
+            # 1) 시간 경과 & 전진
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += dx
             self.pos_y += dy
-            self.battery -= 0.0001
-            if self.battery < 0:
-                self.battery = 0
+
+
+
+            # 2) 측면 회피 중이면
+            if avoidance_steps > 0:
+                # # ─── 디버깅 로그 ───────────────────────────────────
+                # print(
+                #     f"[DEBUG] step={step_idx:4d} | "
+                #     f"avoidance_steps={avoidance_steps:2d} | "
+                #     f"return_steps={return_steps:2d} | "
+                #     f"pos=({self.pos_x:6.2f},{self.pos_y:6.2f})"
+                # )
+                self.pos_x += avoidance_dx
+                self.pos_y += avoidance_dy
+                avoidance_steps -= 1
+                # 회피 끝나면 복귀 설정
+                if avoidance_steps == 0:
+                    return_steps = avoidance_steps_orig
+                    return_dx, return_dy = -avoidance_dx, -avoidance_dy
+                    continue
+
+            # 3) 복귀 중이면
+            if return_steps > 0:
+                self.pos_x += return_dx
+                self.pos_y += return_dy
+                return_steps -= 1
+
+                # if return_steps == 0:
+                #     print("[DEBUG] → 복귀 완료")
+
+                # 4) 배터리 소모 · 상태 갱신
+            self.battery = max(0, self.battery - 0.0001)
             self.update_status()
 
-            # PERMIT 확인
+            # 5) TRAFFIC_REQ 한 번만
             node_dist = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
-            if node_dist <= 1.2 and not self.traffic_event.is_set():
+            if not self.permit_requested and node_dist <= REQUEST_DIST:
+                req = {
+                    "header": {
+                        "msgName": "TRAFFIC_REQ",
+                        "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                    },
+                    "body": {
+                        "missionId": self.current_mission_id,
+                        "submissionId": self.current_submission_id,
+                        "nodeId": node["id"],
+                        "amrId": self.id
+                    }
+                }
+                ws_clients[int(self.id[-3:]) - 1].send(json.dumps(req))
+                self.permit_requested = True
+
+            # 6) 충돌 감지
+            if not self.collision_ignored:
+                waiting_node = self.waiting_for_traffic[2]
+                for other_id, other in SHARED_STATUS.items():
+                    if other_id == self.id:
+                        continue
+                    if waiting_node and NODE_RESERVATIONS.get(waiting_node) == self.id:
+                        break
+                    if other["state"] != 2:
+                        continue
+
+                    # 헤드온 각도 체크
+                    other_dir = other["dir"]
+                    heading_diff = abs((other_dir - self.dir + 180) % 360 - 180)
+                    vx, vy = other["x"] - self.pos_x, other["y"] - self.pos_y
+                    dist = math.hypot(vx, vy)
+                    # 충돌 조건
+                    if dist <= STOP_DIST:
+                        # 헤드온일 때만 측면 회피
+                        if heading_diff > 150:
+                            # 측면 단위 벡터
+                            latx, laty = -dy, dx
+                            norm = math.hypot(latx, laty) or 1
+                            latx, laty = latx / norm, laty / norm
+
+                            # 10스텝 동안 부드럽게 회피
+                            avoidance_steps = 10
+                            avoidance_dx = latx * per_step_dist
+                            avoidance_dy = laty * per_step_dist
+                            avoidance_steps_orig = avoidance_steps  # 복귀용 저장
+                            break
+
+                        # 그 외 기존 멈춤+백오프
+                        dot = dx * vx + dy * vy
+                        if dot <= 0:
+                            continue
+                        cos_a = max(-1.0, min(1.0, dot / (math.hypot(dx, dy) * dist)))
+                        angle = math.degrees(math.acos(cos_a))
+                        if angle > 60:
+                            continue
+
+                        # print(f"⛔ {self.id} stopping: {other_id} at {dist:.2f}m, angle {angle:.1f}°")
+                        backoff = random.uniform(0, 0.2)
+                        # print(f"⏳ {self.id} backing off {backoff:.2f}s")
+                        yield self.env.timeout(backoff)
+
+                        pause_start = self.env.now
+                        resume_dead = self.env.now + MIN_PAUSE_TIME
+                        while True:
+                            yield self.env.timeout(REALTIME_INTERVAL)
+                            if self.env.now < resume_dead:
+                                continue
+                            if self.env.now - pause_start >= MAX_WAIT_BEFORE_IGNORE:
+                                # print(
+                                #     f"⚠️ {self.id} waited {MAX_WAIT_BEFORE_IGNORE}s, ignoring collision with {other_id}")
+                                self.collision_ignored = True
+                                break
+                            s = SHARED_STATUS.get(other_id)
+                            if not s:
+                                break
+                            if math.hypot(s["x"] - self.pos_x, s["y"] - self.pos_y) >= RESUME_DIST:
+                                # print(
+                                #     f"✅ {self.id} resuming: {other_id} now {math.hypot(s['x'] - self.pos_x, s['y'] - self.pos_y):.2f}m away")
+                                break
+                        break
+
+            # 7) TRAFFIC_PERMIT 대기
+            node_dist = self.get_distance(self.pos_x, self.pos_y, node["x"], node["y"])
+            if node_dist <= STOP_DIST and not self.traffic_event.is_set():
                 while not self.traffic_event.is_set():
                     yield self.env.timeout(REALTIME_INTERVAL)
 
@@ -462,7 +580,7 @@ class AMR:
 
         # 6. docking 노드는 도착 후 작업 시간 5초간 대기
         if node["nodeType"] == "DOCKING":
-            print(f"🛠️ {self.id} docking 작업 중 (5초)")
+            # print(f"🛠️ {self.id} docking 작업 중 (5초)")
             for _ in range(int(5 / REALTIME_INTERVAL)):
                 yield self.env.timeout(REALTIME_INTERVAL)
 
@@ -494,17 +612,32 @@ def setup_amrs(env, map_data):
     amrs = []
 
     amr_start_positions = [
-        (0.5, 10.5), (0.5, 12.5), (0.5, 14.5), (0.5, 16.5),
-        (0.5, 32.5), (0.5, 34.5), (0.5, 36.5), (0.5, 42.5),
-        (0.5, 44.5), (0.5, 46.5), (0.5, 48.5), (0.5, 63.5),
-        (0.5, 65.5), (0.5, 67.5), (0.5, 69.5), (3.5, 10.5),
-        (3.5, 12.5), (3.5, 16.5), (3.5, 32.5), (3.5, 34.5)
+        (115, 7.5, 6.5),
+        (103, 21.5, 3.5),
+        (106, 36.5, 3.5),
+        (109, 47.5, 3.5),
+        (112, 62.5, 3.5),
+        (132, 76.5, 6.5),
+        (133, 7.5, 38.5),
+        (136, 16.5, 38.5),
+        (140, 36.5, 38.5),
+        (143, 47.5, 38.5),
+        (147, 67.5, 38.5),
+        (150, 76.5, 38.5),
+        (169, 7.5, 73.5),
+        (189, 21.5, 76.5),
+        (192, 36.5, 76.5),
+        (195, 47.5, 76.5),
+        (198, 62.5, 76.5),
+        (186, 76.5, 73.5),
+        (65, 0.5, 32.5),
+        (71, 0.5, 48.5),
     ]
 
-    for i, (x, y) in enumerate(amr_start_positions):
+    for i, (n, x, y) in enumerate(amr_start_positions):
         amr_id = f"AMR{str(i + 1).zfill(3)}"
         amr_type = 0 if i < 10 else 1  # 0번~9번 → type=0, 10번~19번 → type=1
-        amr = AMR(env, amr_id, map_data, x, y, amr_type, i+61)
+        amr = AMR(env, amr_id, map_data, x, y, amr_type, n)
         amr.update_status()
         env.process(amr.run())
         amrs.append(amr)
@@ -539,7 +672,7 @@ def broadcast_status():
                             "currentEdge": status.get("currentEdge", ""),
                             "loading": True if status["loaded"] else False,
                             "missionId": status.get("missionId", ""),
-                            "submissionId": status.get("submissionId", ""),
+                            "submissionId": status.get("submissionId", "0"),
                             "linearVelocity": status.get("speed", 0),
                             "missionType": status.get("missionType", 0),
                             "errorList": ""

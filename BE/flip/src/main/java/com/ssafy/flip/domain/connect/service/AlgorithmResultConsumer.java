@@ -81,6 +81,7 @@ public class AlgorithmResultConsumer {
                 if (split.size() > 1) {
                     MissionResponse delayed = split.get(1);
                     delayedMissionMap.put(delayed.getAmrId(), delayed);
+                    log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
                 }
             }
 
