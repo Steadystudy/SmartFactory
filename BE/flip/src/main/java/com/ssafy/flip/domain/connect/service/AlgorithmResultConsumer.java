@@ -77,6 +77,7 @@ public class AlgorithmResultConsumer {
     public void processMission(MissionResponse res) throws JsonProcessingException {
         String amrId = res.getAmrId();
         String key = "AMR_STATUS:" + amrId;
+        log.info("res 값  {}", res);
         redis.opsForHash().put(key, "missionId", String.valueOf(res.getMissionId()));
         redis.opsForHash().put(key, "missionType", String.valueOf(res.getMissionType()));
         redis.opsForHash().put(key, "submissionList", mapper.writeValueAsString(res.getRoute()));

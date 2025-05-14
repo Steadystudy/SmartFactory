@@ -15,6 +15,7 @@ import com.ssafy.flip.domain.node.service.node.NodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -37,6 +38,7 @@ public class WebSocketServiceImpl implements WebSocketService {
 
     // 🔧 AmrWebSocketHandler를 제거하고 세션 Map 직접 관리
     private final Map<String, WebSocketSession> amrSessions = new ConcurrentHashMap<>();
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     public void registerSession(String amrId, WebSocketSession session) {
@@ -110,6 +112,19 @@ public class WebSocketServiceImpl implements WebSocketService {
             List<Integer> route = res.getRoute();
             List<MissionAssignDTO.SubmissionDTO> submissions = new ArrayList<>();
 
+            // ✅ Redis에서 시작 submissionId 읽기
+            String redisKey = "AMR_STATUS:" + amrId;
+            Object rawStartId = stringRedisTemplate.opsForHash().get(redisKey, "submissionId");
+
+            int startSubmissionId = 1; // 기본값
+            try {
+                if (rawStartId != null) {
+                    startSubmissionId = Integer.parseInt(rawStartId.toString());
+                }
+            } catch (NumberFormatException e) {
+                log.warn("⚠️ submissionId 파싱 실패: {}", rawStartId);
+            }
+
             for (int i = 1; i < route.size(); i++) {
                 int prev = route.get(i - 1);
                 int curr = route.get(i);
@@ -122,13 +137,14 @@ public class WebSocketServiceImpl implements WebSocketService {
 
                 if ("UNKNOWN".equals(edgeId)) {
                     log.error("❗ 존재하지 않는 edgeKey: {}", edgeKey);
-                    // 예외를 던지거나 기본값으로 처리
                     throw new IllegalArgumentException("Invalid edgeKey: " + edgeKey);
                 }
 
+                // ✅ Redis 기반 submissionId 생성
+                int submissionId = startSubmissionId + (i);
 
                 submissions.add(new MissionAssignDTO.SubmissionDTO(
-                        String.valueOf(i),
+                        String.valueOf(submissionId),
                         String.valueOf(curr),
                         edgeId));
             }
@@ -139,9 +155,10 @@ public class WebSocketServiceImpl implements WebSocketService {
                     res.getMissionType(),
                     submissions
             );
-            
+
             String payload = objectMapper.writeValueAsString(missionAssignDTO);
-            System.out.println("payload는 이값입니다 : "+payload);
+            System.out.println("payload는 이값입니다 : " + payload);
+
             WebSocketSession session = amrSessions.get(amrId);
 
             if (session != null && session.isOpen()) {
@@ -155,4 +172,5 @@ public class WebSocketServiceImpl implements WebSocketService {
             log.error("❗ sendMission 전송 실패", e);
         }
     }
+
 }

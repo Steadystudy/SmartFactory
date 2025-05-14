@@ -42,9 +42,9 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
                     pass  # 그대로 current_node 유지
 
             except Exception as e:
-                print(f"⚠️ submissionList 파싱 오류 (AMR{i:03}): {e}")
+                pass
         if i == testNumber:
-            print("계산전 current 와 노드 id",current_node,node_id)
+            print("계산전 current 와 노드 id 와",current_node,node_id,int(h.get("submissionId", 0)))
 
         loading = 1 if str(h.get("missionType", "")).upper() in ("LOADING", "CHARGING") else 0
         robot_list.append((amr_id, node_id, loading))
@@ -141,7 +141,8 @@ def listen_loop():
             producer.produce("algorithm-result", json.dumps(all_results))
             producer.flush()
 
-testNumber=16
+
+testNumber=9
 if __name__ == "__main__":
     #api.mapInit()
     listen_loop()
