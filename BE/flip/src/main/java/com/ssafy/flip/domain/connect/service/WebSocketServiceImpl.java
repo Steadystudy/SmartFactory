@@ -112,11 +112,10 @@ public class WebSocketServiceImpl implements WebSocketService {
             List<Integer> route = res.getRoute();
             List<MissionAssignDTO.SubmissionDTO> submissions = new ArrayList<>();
 
-            // ✅ Redis에서 시작 submissionId 읽기
             String redisKey = "AMR_STATUS:" + amrId;
             Object rawStartId = stringRedisTemplate.opsForHash().get(redisKey, "submissionId");
 
-            int startSubmissionId = 1; // 기본값
+            int startSubmissionId = 0; // 기본값
             try {
                 if (rawStartId != null) {
                     startSubmissionId = Integer.parseInt(rawStartId.toString());
@@ -137,12 +136,11 @@ public class WebSocketServiceImpl implements WebSocketService {
 
                 if ("UNKNOWN".equals(edgeId)) {
                     log.error("❗ 존재하지 않는 edgeKey: {}", edgeKey);
+                    // 예외를 던지거나 기본값으로 처리
                     throw new IllegalArgumentException("Invalid edgeKey: " + edgeKey);
                 }
 
-                // ✅ Redis 기반 submissionId 생성
                 int submissionId = startSubmissionId + (i);
-
                 submissions.add(new MissionAssignDTO.SubmissionDTO(
                         String.valueOf(submissionId),
                         String.valueOf(curr),
@@ -155,10 +153,9 @@ public class WebSocketServiceImpl implements WebSocketService {
                     res.getMissionType(),
                     submissions
             );
-
+            
             String payload = objectMapper.writeValueAsString(missionAssignDTO);
-            System.out.println("payload는 이값입니다 : " + payload);
-
+            System.out.println("payload는 이값입니다 : "+payload);
             WebSocketSession session = amrSessions.get(amrId);
 
             if (session != null && session.isOpen()) {
@@ -171,6 +168,11 @@ public class WebSocketServiceImpl implements WebSocketService {
         } catch (Exception e) {
             log.error("❗ sendMission 전송 실패", e);
         }
+    }
+
+    @Override
+    public Map<String, WebSocketSession> getAmrSessions() {
+        return amrSessions;
     }
 
 }
