@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
-
+import { BatteryIcon } from './BatteryIcon';
 interface MissionCardProps {
   data: AMR_CARD_STATUS;
 }
@@ -114,9 +114,11 @@ export const MissionCard = ({ data }: MissionCardProps) => {
       <div className='flex gap-2'>
         <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.amrId}</span>
         <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.type}</span>
-        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>
-          {data.battery}%
-        </span>
+        <div className='flex items-center gap-1 px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>
+          <BatteryIcon percentage={data.battery} />
+          <span>{data.battery}%</span>
+        </div>
+
         {data.errorCode && (
           <span className='px-2 py-1 text-xs text-red-600 bg-red-100 rounded-md'>
             {data.errorCode}

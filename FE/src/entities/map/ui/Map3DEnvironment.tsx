@@ -25,16 +25,14 @@ export const Map3D = () => {
         rotation={[0, 0, 0]}
       />
 
-      <axesHelper args={[100]} />
+      {/* <axesHelper args={[100]} /> */}
       {/* <gridHelper args={[100, 100]} /> */}
 
       {/* 조명 설정 */}
-      <ambientLight intensity={1.5} />
+      <ambientLight intensity={2} />
       <directionalLight
         position={[5, 8, 5]}
         intensity={1.5}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
       />
     </>
   );
