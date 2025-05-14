@@ -25,6 +25,7 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
         current_node = int(h.get("currentNode", 0))
         node_id = current_node  # 기본값
 
+
         # submissionList가 존재할 때 처리
         if "submissionList" in h:
             try:
