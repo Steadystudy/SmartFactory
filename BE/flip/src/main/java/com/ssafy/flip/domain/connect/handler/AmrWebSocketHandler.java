@@ -203,7 +203,25 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
             if (missionId != null) {
                 lastMissionMap.put(amrId, missionId);
             }
+            // — IDLE이 아니면 상태 저장 & 트래픽 제어 계속 —
+            // 1) client에 넘길 route list JSON 생성
+            List<String> routeListJson = routeTempMap
+                    .getOrDefault(amrId, Collections.emptyList())
+                    .stream()
+                    .map(r -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("routeId",   r.getSubmissionId());
+                        m.put("routeNode", r.getNodeId());
+                        m.put("startAt",   r.getStartedAt().format(fmt));
+                        try {
+                            return objectMapper.writeValueAsString(m);
+                        } catch (JsonProcessingException e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
+                    .toList();
 
+            statusService.saveAmr(amrDto, routeListJson);
             // — IDLE 전환 시 “미션 완료” 처리 —
             List<RouteTempDTO> temps = routeTempMap.get(amrId);
             if (state == 1 && temps != null && !temps.isEmpty()) {
@@ -215,6 +233,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
                 MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
                 if (delayed != null) {
+                    log.info("🏁 저장된 후속 미션 맵에서 들고오기 : {}", amrId);
                     //REdis에 미션 시간을 저장하자
                     if ((11<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=20) ||(31<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=40)){
                         lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
@@ -237,7 +256,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
                     // missionType을 UNLOADING으로 덮어쓰기
                     String amrKey = "AMR_STATUS:" + amrDto.body().amrId();
-                    stringRedisTemplate.opsForHash().put(amrKey, "missionType", "UNLOADING");
+                    stringRedisTemplate.opsForHash().put(amrKey, "missionType", "LOADING");
                     stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "");
 
                     trigger.run(payload);
@@ -260,25 +279,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 return;
             }
 
-            // — IDLE이 아니면 상태 저장 & 트래픽 제어 계속 —
-            // 1) client에 넘길 route list JSON 생성
-            List<String> routeListJson = routeTempMap
-                    .getOrDefault(amrId, Collections.emptyList())
-                    .stream()
-                    .map(r -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("routeId",   r.getSubmissionId());
-                        m.put("routeNode", r.getNodeId());
-                        m.put("startAt",   r.getStartedAt().format(fmt));
-                        try {
-                            return objectMapper.writeValueAsString(m);
-                        } catch (JsonProcessingException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .toList();
 
-            statusService.saveAmr(amrDto, routeListJson);
 
             // 2) 이전 노드 해제 → 대기열 있는 AMR에 퍼밋 전송
             Integer currNode = nodeId;
