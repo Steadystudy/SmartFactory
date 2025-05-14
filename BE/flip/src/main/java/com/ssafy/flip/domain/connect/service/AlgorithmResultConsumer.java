@@ -191,7 +191,7 @@ public class AlgorithmResultConsumer {
                 MissionResponse part1 = new MissionResponse(
                         res.getAmrId(),
                         String.format("MISSION%03d", r1.get(r1.size() - 1)),
-                        "UNLOADING",
+                        "LOADING",
                         res.getExpectedArrival(),
                         r1
                 );
@@ -199,7 +199,7 @@ public class AlgorithmResultConsumer {
                 MissionResponse part2 = new MissionResponse(
                         res.getAmrId(),
                         res.getMissionId(),
-                        "LOADING",
+                        "UNLOADING",
                         res.getExpectedArrival(),
                         r2
                 );
