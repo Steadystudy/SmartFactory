@@ -13,9 +13,11 @@ public record MissionStatusResponseDTO(
         List<SubmissionDTO> submissionList = amrStatusRedis.getSubmissionList();
         int submissionId = amrStatusRedis.getSubmissionId(); // 기준 인덱스
 
-        for (int i = submissionId; i < submissionList.size(); i++) {
-            SubmissionDTO submissionJson = submissionList.get(i);
-            submissionDTOList.add(submissionJson);
+        if(submissionId > 0) {
+            for (int i = submissionId; i < submissionList.size(); i++) {
+                SubmissionDTO submissionJson = submissionList.get(i);
+                submissionDTOList.add(submissionJson);
+            }
         }
 
         return new MissionStatusResponseDTO(submissionDTOList);
