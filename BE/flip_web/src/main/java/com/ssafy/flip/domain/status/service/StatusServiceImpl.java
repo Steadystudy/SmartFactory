@@ -206,6 +206,8 @@ public class StatusServiceImpl implements StatusService{
         //Edge에 카운트 세고 x, y 찾아서 리턴
         Map<Integer, Integer> nodeCountMap = new HashMap<>();
 
+        List<HeatMapResponseDTO.HeatMapDTO> heatMapList = new ArrayList<>();
+
         for (Object[] row : routeList) {
             Integer edgeId = (Integer) row[0];
             Long count = (Long) row[1];
@@ -213,20 +215,12 @@ public class StatusServiceImpl implements StatusService{
             Edge edge = edgeMap.get(edgeId);
             if (edge == null) continue;
 
-            Node node1 = edge.getNode1();
-            Node node2 = edge.getNode2();
-
-            nodeCountMap.merge(node1.getNodeId(), count.intValue(), Integer::sum);
-            nodeCountMap.merge(node2.getNodeId(), count.intValue(), Integer::sum);
-        }
-
-        List<HeatMapResponseDTO.HeatMapDTO> heatMapList = new ArrayList<>();
-
-        for (Node node : nodeMap.values()) {
-            int count = nodeCountMap.getOrDefault(node.getNodeId(), 0);
 
             heatMapList.add(new HeatMapResponseDTO.HeatMapDTO(
-                    node.getX(), node.getY(),
+                    nodeMap.get(edge.getNode1().getNodeId()).getX(),
+                    nodeMap.get(edge.getNode1().getNodeId()).getY(),
+                    nodeMap.get(edge.getNode2().getNodeId()).getX(),
+                    nodeMap.get(edge.getNode2().getNodeId()).getY(),
                     count
             ));
         }
