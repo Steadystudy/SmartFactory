@@ -36,7 +36,7 @@ public class WebResultConsumer {
             //미션 저장
             missionService.setAmrMission(responses);
 
-            statusWebSocketService.pushMissionStatus();
+//            statusWebSocketService.pushMissionStatus();
         } catch (Exception e) {
             log.error(e.getMessage());
         }

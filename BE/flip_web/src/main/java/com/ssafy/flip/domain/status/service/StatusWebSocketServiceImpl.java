@@ -7,14 +7,19 @@ import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
 import com.ssafy.flip.domain.status.repository.LineStatusRedisManualRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.messaging.handler.annotation.DestinationVariable;
+import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +30,9 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
     private final AmrStatusRedisManualRepository amrStatusRedisManualRepository;
     private final LineStatusRedisManualRepository lineStatusRedisManualRepository;
     private final MissionService missionService;
+
+    private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
+    private final ThreadPoolTaskScheduler scheduler = initScheduler();
 
     @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
@@ -50,6 +58,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
     }
 
     @Override
+    @Scheduled(fixedRate = 1000)
     public void pushMissionStatus() {
         //미션 저장
         Map<String, AmrMissionDTO> amrMissionMap = missionService.getAmrMission();
@@ -85,6 +94,46 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
         LineStatusResponseDTO responseDTO = LineStatusResponseDTO.from(lineAmountMap);
         messagingTemplate.convertAndSend("/amr/line", responseDTO);
+    }
+
+//    @Override
+//    @Scheduled(fixedRate = 1000)
+//    public void getRouteStatus() {
+//        for(int i = 1; i <= 20; i++) {
+//            String amrId = String.format("AMR%03d", i);
+//            AmrStatusRedis amrStatusRedis = amrStatusRedisManualRepository.findByAmrId(amrId)
+//                    .orElseThrow();
+//
+//            MissionStatusResponseDTO responseDTO = MissionStatusResponseDTO.from(amrStatusRedis);
+//            messagingTemplate.convertAndSend("/amr/route" + amrId, responseDTO);
+//        }
+//    }
+
+    private ThreadPoolTaskScheduler initScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(10); // 동시 AMR 수
+        scheduler.initialize();
+        return scheduler;
+    }
+
+    public void getRouteStatus(String amrId) {
+        if (scheduledTasks.containsKey(amrId)) return;
+
+        ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(() -> {
+            amrStatusRedisManualRepository.findByAmrId(amrId).ifPresent(status -> {
+                MissionStatusResponseDTO dto = MissionStatusResponseDTO.from(status);
+                messagingTemplate.convertAndSend("/amr/route/" + amrId, dto);
+            });
+        }, 500); // 0.5초 간격
+
+        scheduledTasks.put(amrId, future);
+    }
+
+    public void stopPushing(String amrId) {
+        ScheduledFuture<?> future = scheduledTasks.remove(amrId);
+        if (future != null) {
+            future.cancel(true);
+        }
     }
 
     private Map<LineStatusRedis, Integer> calculateAmount() {
