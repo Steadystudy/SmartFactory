@@ -46,7 +46,7 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
         if i == testNumber:
             print("계산전 current 와 노드 id 와",current_node,node_id,int(h.get("submissionId", 0)))
 
-        loading = 1 if str(h.get("missionType", "")).upper() in ("LOADING", "CHARGING") else 0
+        loading = 1 if str(h.get("missionType", "")).upper() in ("UNLOADING", "CHARGING") else 0
         robot_list.append((amr_id, node_id, loading))
 
     return robot_list
