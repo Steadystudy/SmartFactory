@@ -6,8 +6,10 @@ public record HeatMapResponseDTO(
         List<HeatMapDTO> data
 ) {
     public record HeatMapDTO(
-            float x,
-            float y,
-            int count
+            float toX,
+            float toY,
+            float fromX,
+            float fromY,
+            Long count
     ) {}
 }

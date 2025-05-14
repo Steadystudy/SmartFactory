@@ -6,4 +6,9 @@ public interface StatusWebSocketService {
 
     void pushLineStatus();
 
+    void getRouteStatus(String amrId);
+
+    void stopPushing(String amrId);
+
+//    void getRouteStatus();
 }
