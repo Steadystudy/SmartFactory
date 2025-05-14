@@ -112,34 +112,70 @@ def listen_loop():
         msg = consumer.poll(1.0)
         if msg is None or msg.error():
             continue
-        print("✅ Received:", msg.value().decode('utf-8'))
 
-        # ---------------- 알고리즘 실행 ----------------
+        raw_value = msg.value().decode('utf-8')
+        print("✅ Received:", repr(raw_value))
+
+        # ✅ JSON 형식 아님 → 단순 문자열일 수 있음
+        if not raw_value.strip().startswith("{"):
+            if raw_value.strip().lower() == "simulator start":
+                print("🚀 [Simulator Start] 알고리즘 강제 실행")
+                triggered_amr = None  # 트리거 AMR 없음
+                # ↓ 아래에서 알고리즘 실행하게 그대로 내려감
+            else:
+                print(f"⚠️ 비정형 메시지 수신 (무시됨): {raw_value}")
+                continue
+        else:
+            # ✅ JSON 메시지 처리
+            try:
+                payload = json.loads(raw_value)
+            except Exception as e:
+                print(f"❌ 메시지 파싱 실패: {e}")
+                continue
+
+            msg_name = payload.get("header", {}).get("msgName", "").upper().replace(" ", "_")
+            if msg_name == "SIMULATOR_START":
+                print("🚀 [SIMULATOR_START] 알고리즘 강제 실행")
+                triggered_amr = None  # 트리거 AMR 없음
+            else:
+                triggered_amr = payload.get("body", {}).get("amrId", None)
+                if triggered_amr:
+                    print(f"🎯 Triggered AMR: {triggered_amr}")
+                else:
+                    print("⚠️ triggered AMR ID가 없음 → 알고리즘 실행 생략")
+                    continue
+
+        # ✅ 알고리즘 실행 부분 공통
         robot   = fetch_robot_list()
         jobs    = fetch_line_status()
         assign  = api.assign_tasks(robot, jobs)
 
-        all_results = []  # ✅ 전체 결과 리스트 초기화
-
+        all_results = []
         for (amr_id, _, _), (dest, _), type, path, cost in assign:
             if cost >= 900 or path is None:
                 continue
             result = {
                 "amrId"  : amr_id,
-                "missionId": f"MISSION{int(dest):03}",  # 예: dest=80 → "MISSION080"
-                "missionType" : type, #미션 타입 "MOVING", "CHARGING"...
+                "missionId": f"MISSION{int(dest):03}",
+                "missionType" : type,
                 "route"  : path,
                 "expectedArrival" : int(cost)
             }
             all_results.append(result)
-            if amr_id=="AMR0"+str(testNumber):
-                h = r.hgetall("AMR_STATUS:AMR0"+str(testNumber))
-                print("현재 current노드",h.get("currentNode", 0))
-                print(result)
-        #print(all_results)
-        if all_results:  # ✅ 1개의 메시지로 전송
-            producer.produce("algorithm-result", json.dumps(all_results))
+
+        print("📦 전체 미션 결과:")
+        for r in all_results:
+            print(r)
+
+        if all_results:
+            payload = {
+                "triggeredAmr": triggered_amr,  # None 일 수도 있음
+                "missions": all_results
+            }
+            producer.produce("algorithm-result", json.dumps(payload))
             producer.flush()
+            print(f"📤 Kafka 전송 완료 (trigger: {triggered_amr})")
+
 
 
 testNumber=9

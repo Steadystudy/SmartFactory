@@ -16,8 +16,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import com.ssafy.flip.domain.connect.dto.request.MissionResultWrapper;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
@@ -36,6 +40,7 @@ public class AlgorithmResultConsumer {
     private final StatusService statusService;
 
 
+
     // ✅ 지연 미션 저장용 해시맵
     @Getter
     private final Map<String, MissionResponse> delayedMissionMap = new ConcurrentHashMap<>();
@@ -47,9 +52,23 @@ public class AlgorithmResultConsumer {
 
 
         try {
-            List<MissionResponse> responses = mapper.readValue(
-                    msg, new TypeReference<List<MissionResponse>>() {}
+            MissionResultWrapper wrapper = mapper.readValue(
+                    msg, MissionResultWrapper.class
             );
+
+            String triggeredAmr = wrapper.getTriggeredAmr();
+            List<MissionResponse> responses = wrapper.getMissions();
+
+            log.info("✅ Kafka 결과 수신: triggeredAmr={}, 총 {}개", triggeredAmr, responses.size());
+
+            // ✅ 미션 취소 (trigger된 AMR이 있는 경우)
+            if (triggeredAmr != null) {
+                for (MissionResponse res : responses) {
+                    if (!triggeredAmr.equals(res.getAmrId())) {
+                        sendCancelMission(res.getAmrId());
+                    }
+                }
+            }
 
             for (MissionResponse res : responses) {
                 List<MissionResponse> split = splitRoute(res);
@@ -72,12 +91,40 @@ public class AlgorithmResultConsumer {
         }
 
     }
+    public void sendCancelMission(String amrId) {
+        try {
+            Map<String, Object> header = new LinkedHashMap<>();
+            header.put("msgName", "MISSION_CANCEL");
+            header.put("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
+            header.put("amrId", amrId);
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("state", "");
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("header", header);
+            payload.put("body", body);
+
+            String json = mapper.writeValueAsString(payload);
+            WebSocketSession session = ws.getAmrSessions().get(amrId);
+
+            if (session != null && session.isOpen()) {
+                session.sendMessage(new TextMessage(json));
+                log.info("📤 MISSION_CANCEL 전송 완료: AMR = {}, Payload = {}", amrId, json);
+            } else {
+                log.warn("❗ WebSocket 세션 없음: AMR = {}", amrId);
+            }
+
+        } catch (Exception e) {
+            log.error("❗ MISSION_CANCEL 전송 실패: AMR = {}", amrId, e);
+        }
+    }
+
 
     // ✅ 미션 즉시 실행 로직 (WebSocket 전송 포함)
     public void processMission(MissionResponse res) throws JsonProcessingException {
         String amrId = res.getAmrId();
         String key = "AMR_STATUS:" + amrId;
-        log.info("res 값  {}", res);
         redis.opsForHash().put(key, "missionId", String.valueOf(res.getMissionId()));
         redis.opsForHash().put(key, "missionType", String.valueOf(res.getMissionType()));
         redis.opsForHash().put(key, "submissionList", mapper.writeValueAsString(res.getRoute()));
