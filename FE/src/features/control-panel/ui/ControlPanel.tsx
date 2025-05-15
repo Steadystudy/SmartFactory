@@ -1,15 +1,29 @@
+'use client';
+
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import FacilityControl from './FacilityControl';
 import AMRControl from './AMRControl';
+import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 
 export const ControlPanel = () => {
+  const { setSelectedAmrId } = useSelectedAMRStore();
+
+  const handleResetSelectedAmr = () => {
+    setSelectedAmrId(null);
+  };
+
   return (
     <Tabs defaultValue='amr' className='min-w-[320px] w-1/4 h-dvh p-2'>
       <TabsList variant='control' className='flex justify-start w-full mb-2 bg-transparent'>
         <TabsTrigger variant='control' value='amr' className='px-6 text-lg'>
           AMR
         </TabsTrigger>
-        <TabsTrigger variant='control' value='equipment' className='px-6 text-lg'>
+        <TabsTrigger
+          onClick={handleResetSelectedAmr}
+          variant='control'
+          value='equipment'
+          className='px-6 text-lg'
+        >
           설비
         </TabsTrigger>
       </TabsList>
