@@ -2,52 +2,17 @@
 
 import { Canvas } from '@react-three/fiber';
 import { MapControls } from '@react-three/drei';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense } from 'react';
 import { Map3D, MapLoading } from '@/entities/map';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { Model3DRenderer } from '@/entities/amrModel';
 import { useCameraFollow } from '../lib';
 import { MapPointer } from '@/entities/3dPointer';
-import { RoutePath, Route } from './RoutePath';
-import { useAmrSocketStore } from '@/shared/store/amrSocket';
-import { useModelStore } from '@/shared/model/store';
+import { RoutePath } from './RoutePath';
 
 const Warehouse = () => {
   const { selectedAmrId, startX, startY, targetX, targetY } = useSelectedAMRStore();
   const { controlsRef } = useCameraFollow();
-  const [route, setRoute] = useState<Route[]>([]);
-  const { amrSocket, isConnected } = useAmrSocketStore();
-  const urlRef = useRef<string>('');
-  const { getSelectedModel } = useModelStore();
-
-  useEffect(() => {
-    if (!amrSocket || !isConnected) return;
-    const destination = `/app/amr/route/${selectedAmrId}`;
-
-    if (urlRef.current !== destination) {
-      // 이전 구독 취소
-      amrSocket.publish({
-        destination: urlRef.current + '/unsubscribe',
-      });
-      amrSocket.unsubscribe(urlRef.current);
-
-      // 새로운 구독
-      amrSocket.publish({
-        destination,
-      });
-
-      amrSocket.subscribe(`/amr/route/${selectedAmrId}`, (data) => {
-        const route = JSON.parse(data.body);
-        const amr = getSelectedModel(selectedAmrId);
-        setRoute([
-          { submissionId: -1, submissionX: amr?.locationX, submissionY: amr?.locationY },
-          ...route.missionStatusList,
-        ]);
-      });
-
-      urlRef.current = destination;
-    }
-  }, [selectedAmrId, amrSocket, isConnected]);
 
   return (
     <>
@@ -61,7 +26,7 @@ const Warehouse = () => {
       {selectedAmrId && <MapPointer position={[targetX!, 3, targetY!]} color='Red' />}
 
       {/* Route 경로 시각화 */}
-      <RoutePath points={route} />
+      <RoutePath />
 
       <MapControls
         ref={controlsRef}

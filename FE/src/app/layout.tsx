@@ -3,11 +3,6 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar, MobileSidebarTrigger } from '@/widgets/sidebar';
-import { MSWProvider } from '@/shared/mocks';
-
-if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.NODE_ENV !== 'production') {
-  await import('@/shared/mocks/server').then(({ server }) => server.listen());
-}
 
 const geistSans = Geist({
   subsets: ['latin'],
@@ -31,15 +26,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang='en'>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}>
-        <MSWProvider>
-          <SidebarProvider>
-            <AppSidebar />
-            <main className='w-full'>
-              <MobileSidebarTrigger />
-              {children}
-            </main>
-          </SidebarProvider>
-        </MSWProvider>
+        <SidebarProvider>
+          <AppSidebar />
+          <main className='w-full'>
+            <MobileSidebarTrigger />
+            {children}
+          </main>
+        </SidebarProvider>
       </body>
     </html>
   );
