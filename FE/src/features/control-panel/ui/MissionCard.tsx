@@ -32,9 +32,15 @@ export const MissionCard = ({ data }: MissionCardProps) => {
   }, [data.startedAt]);
 
   const handleCardClick = () => {
-    setSelectedAmrId(data.amrId);
-    setTargetPosition(data.targetX, data.targetY);
-    setStartPosition(data.startX, data.startY);
+    if (selectedAmrId === data.amrId) {
+      setSelectedAmrId(null);
+      setTargetPosition(0, 0);
+      setStartPosition(0, 0);
+    } else {
+      setSelectedAmrId(data.amrId);
+      setTargetPosition(data.targetX, data.targetY);
+      setStartPosition(data.startX, data.startY);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -86,7 +92,7 @@ export const MissionCard = ({ data }: MissionCardProps) => {
       <div className='flex items-center justify-between mb-4'>
         <div className='flex items-center gap-2'>
           <BoltIcon className='w-6 h-6' />
-          <span className='text-lg font-semibold'>{data.missionType}</span>
+          <span className='text-lg font-semibold'>{data.amrId}</span>
         </div>
         <TooltipProvider>
           <Tooltip delayDuration={0}>
@@ -112,7 +118,9 @@ export const MissionCard = ({ data }: MissionCardProps) => {
       </div>
 
       <div className='flex gap-2'>
-        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.amrId}</span>
+        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>
+          {data.missionType}
+        </span>
         <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.type}</span>
         <div className='flex items-center gap-1 px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>
           <BatteryIcon percentage={data.battery} />

@@ -4,13 +4,9 @@ import { useModelStore } from '@/shared/model/store';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import gsap from 'gsap';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 
-// 뷰어 타입에 따른 카메라 이동 설정
-interface CameraFollowOptions {
-  is2D?: boolean;
-}
-
-export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
+export const useCameraFollow = () => {
   const { getSelectedModel } = useModelStore();
   const { selectedAmrId } = useSelectedAMRStore();
   const controlsRef = useRef<MapControlsImpl>(null);
@@ -31,7 +27,7 @@ export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
     };
   }, []);
 
-  useEffect(() => {
+  useFrame(() => {
     if (!controlsRef.current || !initialRotationRef.current) return;
 
     const selectedAMR = getSelectedModel(selectedAmrId);
@@ -82,7 +78,7 @@ export const useCameraFollow = ({ is2D = false }: CameraFollowOptions = {}) => {
         },
       });
     }
-  }, [selectedAmrId, getSelectedModel, is2D]);
+  });
 
   return { controlsRef };
 };
