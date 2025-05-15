@@ -151,7 +151,7 @@ public class AlgorithmResultConsumer {
                     Node node = nodeJpaRepository.findById(nodeId).orElseThrow();
                     Map<String, Object> map = new LinkedHashMap<>();
                     map.put("submissionId", i + 1);
-//                    map.put("submissionNode", nodeId);
+                    map.put("submissionNode", nodeId);
                     map.put("submissionX", node.getX());
                     map.put("submissionY", node.getY());
                     try {
