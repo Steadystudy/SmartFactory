@@ -2,33 +2,31 @@ import { useRef, useEffect } from 'react';
 import { MapControls as MapControlsImpl } from 'three-stdlib';
 import { useModelStore } from '@/shared/model/store';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
-import gsap from 'gsap';
-import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 
 export const useCameraFollow = () => {
   const { getSelectedModel } = useModelStore();
   const { selectedAmrId } = useSelectedAMRStore();
   const controlsRef = useRef<MapControlsImpl>(null);
-  const initialRotationRef = useRef<THREE.Euler | null>(null);
+  const targetPosition = useRef(new THREE.Vector3());
+  const cameraPosition = useRef(new THREE.Vector3());
 
   // 초기 카메라 설정 저장
   useEffect(() => {
     if (!controlsRef.current) return;
 
     const controls = controlsRef.current;
-    const camera = controls.object;
-
-    // 초기 rotation 저장
-    initialRotationRef.current = camera.rotation.clone();
+    targetPosition.current.copy(controls.target);
+    cameraPosition.current.copy(controls.object.position);
 
     return () => {
       controls.dispose();
     };
   }, []);
 
-  useFrame(() => {
-    if (!controlsRef.current || !initialRotationRef.current) return;
+  useFrame((_, delta) => {
+    if (!controlsRef.current) return;
 
     const selectedAMR = getSelectedModel(selectedAmrId);
 
@@ -39,44 +37,25 @@ export const useCameraFollow = () => {
 
       // 현재 카메라의 상대적 위치 계산
       const offsetX = camera.position.x - currentTarget.x;
-      const offsetY = camera.position.y - currentTarget.y;
       const offsetZ = camera.position.z - currentTarget.z;
 
-      const newTarget = {
-        x: selectedAMR.locationX,
-        y: 0,
-        z: selectedAMR.locationY,
-      };
+      // 새로운 타겟 위치 설정
+      targetPosition.current.set(selectedAMR.locationX, 0, selectedAMR.locationY);
 
       // 새로운 카메라 위치 계산 (상대적 거리 유지)
-      const newCameraPosition = {
-        x: newTarget.x + offsetX,
-        y: newTarget.y + offsetY,
-        z: newTarget.z + offsetZ,
-      };
+      cameraPosition.current.set(
+        targetPosition.current.x + offsetX,
+        camera.position.y,
+        targetPosition.current.z + offsetZ,
+      );
 
-      // 타겟 위치로 부드럽게 이동
-      gsap.to(currentTarget, {
-        x: newTarget.x,
-        y: newTarget.y,
-        z: newTarget.z,
-        duration: 1,
-      });
+      // lerp를 사용하여 부드럽게 이동
+      const lerpFactor = Math.min(1, delta * 5); // 이동 속도 조절 (5는 속도 계수)
 
-      // 카메라 위치도 함께 이동
-      gsap.to(camera.position, {
-        x: newCameraPosition.x,
-        y: newCameraPosition.y,
-        z: newCameraPosition.z,
-        duration: 1,
-        onUpdate: () => {
-          if (controls && controls instanceof MapControlsImpl) {
-            // 초기 rotation 유지
-            camera.rotation.copy(initialRotationRef.current!);
-            controls.update();
-          }
-        },
-      });
+      currentTarget.lerp(targetPosition.current, lerpFactor);
+      camera.position.lerp(cameraPosition.current, lerpFactor);
+
+      controls.update();
     }
   });
 

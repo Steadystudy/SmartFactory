@@ -1,4 +1,8 @@
+import { useModelStore } from '@/shared/model/store';
+import { useAmrSocketStore } from '@/shared/store/amrSocket';
+import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { Line } from '@react-three/drei';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 export interface Route {
@@ -7,15 +11,46 @@ export interface Route {
   submissionY: number;
 }
 
-interface RoutePathProps {
-  points: Route[];
-}
-
 // RoutePath 컴포넌트: Route 배열을 받아 3D 선과 화살표, 색상 그라데이션 렌더링
-export const RoutePath = ({ points }: RoutePathProps) => {
-  if (!points || points.length < 1) return null;
+export const RoutePath = () => {
+  const [route, setRoute] = useState<Route[]>([]);
+  const { selectedAmrId } = useSelectedAMRStore();
+  const { amrSocket, isConnected } = useAmrSocketStore();
+  const urlRef = useRef<string>('');
+  const { getSelectedModel } = useModelStore();
+
+  useEffect(() => {
+    if (!amrSocket || !isConnected) return;
+    const destination = `/app/amr/route/${selectedAmrId}`;
+
+    if (urlRef.current !== destination) {
+      // 이전 구독 취소
+      amrSocket.publish({
+        destination: urlRef.current + '/unsubscribe',
+      });
+      amrSocket.unsubscribe(urlRef.current);
+
+      // 새로운 구독
+      amrSocket.publish({
+        destination,
+      });
+
+      amrSocket.subscribe(`/amr/route/${selectedAmrId}`, (data) => {
+        const route = JSON.parse(data.body);
+        const amr = getSelectedModel(selectedAmrId);
+        setRoute([
+          { submissionId: -1, submissionX: amr?.locationX, submissionY: amr?.locationY },
+          ...route.missionStatusList,
+        ]);
+      });
+
+      urlRef.current = destination;
+    }
+  }, [selectedAmrId, amrSocket, isConnected]);
+
+  if (!route || route.length < 1) return null;
   // 3D 좌표 배열 생성 (Y축 고정)
-  const positions: [number, number, number][] = points.map((p) => [
+  const positions: [number, number, number][] = route.map((p) => [
     p.submissionX,
     0.11,
     p.submissionY,

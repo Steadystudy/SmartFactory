@@ -1,5 +1,6 @@
 'use client';
 
+import { useLineStore } from '@/shared/store/lineStore';
 import { useAnimations, useGLTF } from '@react-three/drei';
 import { useEffect, useRef } from 'react';
 
@@ -7,12 +8,21 @@ export const Map3D = () => {
   const group = useRef(null);
   const { scene, animations } = useGLTF('/Factory.glb');
   const { actions } = useAnimations(animations, group);
+  const { lines } = useLineStore();
 
   useEffect(() => {
-    Object.values(actions).forEach((action) => {
-      action?.play();
+    const factoryAnimations = Object.values(actions).filter((action) =>
+      action?.getClip().name.includes('Line'),
+    );
+    lines.forEach((line) => {
+      const action = factoryAnimations[line.lineId - 1];
+      if (line.amount === 0 || !line.status) {
+        action?.stop();
+      } else {
+        action?.play();
+      }
     });
-  }, [actions]);
+  }, [actions, lines]);
 
   return (
     <>
@@ -30,10 +40,7 @@ export const Map3D = () => {
 
       {/* 조명 설정 */}
       <ambientLight intensity={2} />
-      <directionalLight
-        position={[5, 8, 5]}
-        intensity={1.5}
-      />
+      <directionalLight position={[5, 8, 5]} intensity={1.5} />
     </>
   );
 };
