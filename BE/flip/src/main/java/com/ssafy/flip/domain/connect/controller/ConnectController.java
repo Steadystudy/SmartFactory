@@ -1,6 +1,8 @@
 package com.ssafy.flip.domain.connect.controller;
 
+import com.ssafy.flip.domain.connect.handler.HumanWebSocketHandler;
 import com.ssafy.flip.domain.connect.service.ConnectService;
+import com.ssafy.flip.domain.connect.service.HumanWebSocketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ public class ConnectController {
 
     private final ConnectService connectService;
     private final StringRedisTemplate redisTemplate;
+    private final HumanWebSocketHandler humanWebSocketHandler;
 
     // 연결된 AMR 목록 조회
     @GetMapping("/")
@@ -60,5 +63,11 @@ public class ConnectController {
     public ResponseEntity<String> triggerAlgorithm() {
         redisTemplate.convertAndSend("algorithm-trigger", "RUN");
         return ResponseEntity.ok("📡 Algorithm trigger sent.");
+    }
+
+    @PostMapping("/human")
+    public ResponseEntity<String> triggerHuman() throws IOException {
+        humanWebSocketHandler.sendStart();
+        return ResponseEntity.ok("Human start");
     }
 }
