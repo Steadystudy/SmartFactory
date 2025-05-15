@@ -14,16 +14,16 @@ export const BatteryIcon = ({ percentage, className }: BatteryIconProps) => {
 
   return (
     <div className={cn('relative flex items-center', className)}>
-      <div className="relative w-6 h-3 border-2 border-gray-400 rounded-full overflow-hidden bg-white">
+      <div className='relative w-6 h-3 overflow-hidden bg-white border-2 border-gray-400 rounded-full'>
         <div
           className={cn(
-            'h-full transition-all duration-300',
-            getBatteryColor(percentage)
+            'h-full w-full origin-left transition-transform duration-300',
+            getBatteryColor(percentage),
           )}
-          style={{ width: `${percentage}%` }}
+          style={{ transform: `scaleX(${percentage / 100})` }}
         />
       </div>
-      <div className="w-1 h-2 bg-gray-400 rounded-r-full ml-[-2px]" />
+      <div className='w-1 h-2 bg-gray-400 rounded-r-full ml-[-2px]' />
     </div>
   );
-}; 
+};

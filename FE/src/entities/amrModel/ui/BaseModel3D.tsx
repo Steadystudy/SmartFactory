@@ -1,6 +1,6 @@
 'use client';
 
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { useRef, useEffect } from 'react';
 import { Model3DProps } from '../model/types';
 import * as THREE from 'three';
@@ -12,31 +12,9 @@ const ANIMATION_SETTINGS = {
   positionDamping: 0.1,
 };
 
-export const BaseModel3D = ({ scene, position, rotation, amrState, onClick }: Model3DProps) => {
-  const { selectedAmrId, setSelectedAmrId } = useSelectedAMRStore();
+export const BaseModel3D = ({ scene, position, rotation, amrState }: Model3DProps) => {
+  const { selectedAmrId } = useSelectedAMRStore();
   const { amrId } = amrState;
-  const { gl } = useThree();
-
-  // 바깥 클릭 이벤트 핸들러 추가
-  useEffect(() => {
-    const handleBackgroundClick = (event: MouseEvent) => {
-      // 배경 클릭 시 selectedAmrId를 null로 설정
-      if (event.target === gl.domElement) {
-        setSelectedAmrId(null);
-      }
-    };
-
-    gl.domElement.addEventListener('click', handleBackgroundClick);
-    return () => {
-      gl.domElement.removeEventListener('click', handleBackgroundClick);
-    };
-  }, [gl, setSelectedAmrId]);
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedAmrId(amrId);
-    onClick?.();
-  };
 
   const modelRef = useRef<THREE.Group>(null);
 
@@ -92,7 +70,5 @@ export const BaseModel3D = ({ scene, position, rotation, amrState, onClick }: Mo
     });
   }, [selectedAmrId, amrId]);
 
-  return (
-    <primitive ref={modelRef} object={scene} className='cursor-pointer' onClick={handleClick} />
-  );
+  return <primitive ref={modelRef} object={scene} className='cursor-pointer' />;
 };

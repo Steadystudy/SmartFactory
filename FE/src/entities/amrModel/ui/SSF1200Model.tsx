@@ -8,7 +8,6 @@ import * as THREE from 'three';
 
 export const SSF1200Model = (props: Omit<Model3DProps, 'scene'>) => {
   const { scene, animations } = useGLTF('/SSF-650.glb');
-  const { actions } = useAnimations(animations, scene);
   const {
     amrState: { loading, amrId },
   } = props;
@@ -21,7 +20,8 @@ export const SSF1200Model = (props: Omit<Model3DProps, 'scene'>) => {
       }
     });
     return clonedScene;
-  }, [scene, loading]);
+  }, [scene]);
+  const { actions } = useAnimations(animations, instance);
 
   useEffect(() => {
     // 이전 애니메이션 중지
@@ -40,4 +40,3 @@ export const SSF1200Model = (props: Omit<Model3DProps, 'scene'>) => {
 
   return <BaseModel3D scene={instance} {...props} />;
 };
-useGLTF.preload('/SSF-650.glb');
