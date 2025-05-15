@@ -9,7 +9,7 @@ import * as THREE from 'three';
 export const SSF1200Model = (props: Omit<Model3DProps, 'scene'>) => {
   const { scene, animations } = useGLTF('/SSF-650.glb');
   const {
-    amrState: { loading, amrId },
+    amrState: { loading },
   } = props;
   // 각 인스턴스마다 새로운 scene 클론 생성
   const instance = useMemo(() => {
@@ -30,10 +30,8 @@ export const SSF1200Model = (props: Omit<Model3DProps, 'scene'>) => {
     });
 
     if (loading) {
-      console.log(amrId, 'SSF-650 Load 애니메이션 실행');
       actions['SSF-650 Load']?.reset().play();
     } else {
-      console.log(amrId, 'SSF-650 Unload 애니메이션 실행');
       actions['SSF-650 Unload']?.reset().play();
     }
   }, [loading, actions]);
