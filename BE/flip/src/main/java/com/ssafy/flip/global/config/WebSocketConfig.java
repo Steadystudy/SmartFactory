@@ -1,6 +1,7 @@
 package com.ssafy.flip.global.config;
 
 import com.ssafy.flip.domain.connect.handler.AmrWebSocketHandler;
+import com.ssafy.flip.domain.connect.handler.HumanWebSocketHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 import org.springframework.context.annotation.Bean;
@@ -18,9 +19,13 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Autowired
     private AmrWebSocketHandler amrHandler;
 
+    @Autowired
+    private HumanWebSocketHandler humanHandler;
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(amrHandler, "/ws/amr").setAllowedOrigins("*");
+        registry.addHandler(humanHandler, "/ws/human").setAllowedOrigins("*");
     }
 
     /**

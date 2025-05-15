@@ -2,24 +2,26 @@ package com.ssafy.flip.domain.status.service;
 
 import com.ssafy.flip.domain.status.dto.response.*;
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
+import com.ssafy.flip.domain.status.entity.HumanStatusRedis;
 import com.ssafy.flip.domain.status.entity.LineStatusRedis;
 import com.ssafy.flip.domain.status.repository.AmrStatusRedisManualRepository;
+import com.ssafy.flip.domain.status.repository.HumanStatusRedisManualRepository;
 import com.ssafy.flip.domain.status.repository.LineStatusRedisManualRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
-import org.springframework.messaging.handler.annotation.DestinationVariable;
-import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,10 +31,17 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
     private final SimpMessagingTemplate messagingTemplate;
     private final AmrStatusRedisManualRepository amrStatusRedisManualRepository;
     private final LineStatusRedisManualRepository lineStatusRedisManualRepository;
+    private final HumanStatusRedisManualRepository humanStatusRedisManualRepository;
     private final MissionService missionService;
 
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
     private final ThreadPoolTaskScheduler scheduler = initScheduler();
+
+    private final Map<String, Boolean> humanSubscribers = new ConcurrentHashMap<>();
+    private ScheduledFuture<?> humanScheduledTask;
+    private final AtomicInteger humanSubscriberCount = new AtomicInteger(0);
+
+    private final WebClient webClient;
 
     @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
@@ -136,6 +145,39 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
         }
     }
 
+    // Human 푸시 시작
+    @Override
+    public synchronized void startHumanPushing(String sessionId) {
+
+        webClient.post()
+                .uri("https://k12s110.p.ssafy.io/command/api/v1/connect/human")
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+
+        humanSubscribers.put(sessionId, true);
+        if (humanSubscriberCount.incrementAndGet() == 1) {
+            humanScheduledTask = scheduler.scheduleAtFixedRate(() -> {
+                HumanStatusRedis humanStatusList = humanStatusRedisManualRepository.findAllHumanStatus();
+                if (humanStatusList != null) {
+                    messagingTemplate.convertAndSend("/amr/human", humanStatusList);
+                }
+            }, 100);
+        }
+    }
+
+    // Human 푸시 중단
+    @Override
+    public synchronized void stopHumanPushing(String sessionId) {
+        humanSubscribers.remove(sessionId);
+        if (humanSubscriberCount.decrementAndGet() <= 0) {
+            if (humanScheduledTask != null) {
+                humanScheduledTask.cancel(true);
+                humanScheduledTask = null;
+            }
+        }
+    }
+
     private Map<LineStatusRedis, Integer> calculateAmount() {
         List<LineStatusRedis> lineList = lineStatusRedisManualRepository.findAllLineStatus();
         Map<LineStatusRedis, Integer> amountMap = new HashMap<>();
@@ -164,5 +206,13 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                         (e1, e2) -> e1,
                         LinkedHashMap::new
                 ));
+    }
+
+    @Scheduled(fixedRate = 100)
+    private void broadcastHumanStatus() {
+        HumanStatusRedis humanStatusList = humanStatusRedisManualRepository.findAllHumanStatus();
+        if(humanStatusList != null) {
+            messagingTemplate.convertAndSend("/amr/human", humanStatusList);
+        }
     }
 }

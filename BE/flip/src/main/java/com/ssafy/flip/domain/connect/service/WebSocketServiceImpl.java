@@ -70,43 +70,6 @@ public class WebSocketServiceImpl implements WebSocketService {
         }
     }
 
-
-    @Override
-    public String missionAssign(String amrId) {
-        String dummyJson = """
-                {
-                   "header": {
-                      "msgName": "MISSION_ASSIGN",
-                      "time": "2025-05-02 14:25:10.000",
-                      "amrId": "%s"
-                   },
-                   "body": {
-                      "missionId":"mission001",
-                      "missionType":"moving",
-                      "submissions":[
-                         {
-                            "submissionId":1,
-                            "nodeId":1,
-                            "edgeId":10
-                         },
-                         {
-                            "submissionId":2,
-                            "nodeId":2,
-                            "edgeId":1
-                         },
-                         {
-                            "submissionId":3,
-                            "nodeId":9,
-                            "edgeId":18
-                         }
-                      ]
-                   }
-                }
-                """.formatted(amrId);
-
-        return dummyJson;
-    }
-
     public void sendMission(String amrId, MissionResponse res) {
         try {
             List<Integer> route = res.getRoute();

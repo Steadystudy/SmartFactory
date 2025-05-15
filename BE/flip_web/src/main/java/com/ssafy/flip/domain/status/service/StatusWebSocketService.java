@@ -10,5 +10,8 @@ public interface StatusWebSocketService {
 
     void stopPushing(String amrId);
 
-//    void getRouteStatus();
+    void startHumanPushing(String sessionId);
+
+    void stopHumanPushing(String sessionId);
+
 }

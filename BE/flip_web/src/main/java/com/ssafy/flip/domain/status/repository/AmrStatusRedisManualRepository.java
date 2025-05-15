@@ -44,8 +44,7 @@ public class AmrStatusRedisManualRepository {
 
 
     private AmrStatusRedis convertMapToAmrStatusRedis(Map<Object, Object> map, String amrId) {
-        List<SubmissionDTO> submissionList = parseJsonStringList(
-                castToListOfString(map.get("submissionList")), SubmissionDTO.class);
+        List<SubmissionDTO> submissionList = parseSubmissionList(map.get("submissionList"));
 
         List<RouteDTO> routeList = parseJsonStringList(
                 castToListOfString(map.get("routeList")), RouteDTO.class);
@@ -81,6 +80,7 @@ public class AmrStatusRedisManualRepository {
             }
 
             try {
+                // 1단계: JSON 문자열 배열로 파싱
                 return objectMapper.readValue(str, new TypeReference<List<String>>() {});
             } catch (JsonProcessingException e) {
                 throw new RuntimeException("castToListOfString: JSON 문자열 배열 파싱 실패: " + str, e);
@@ -90,12 +90,35 @@ public class AmrStatusRedisManualRepository {
         throw new IllegalArgumentException("castToListOfString: 지원하지 않는 타입: " + obj.getClass());
     }
 
+    private List<SubmissionDTO> parseSubmissionList(Object raw) {
+        try {
+            // raw는 Redis에서 꺼낸 그대로: String
+            if (raw instanceof String rawStr) {
+                // 1단계: 이중 직렬화 제거
+                List<String> innerJsonList = objectMapper.readValue(rawStr, new TypeReference<List<String>>() {});
 
+                // 2단계: 각 문자열을 다시 SubmissionDTO로 파싱
+                return innerJsonList.stream()
+                        .map(s -> {
+                            try {
+                                return objectMapper.readValue(s, SubmissionDTO.class);
+                            } catch (JsonProcessingException e) {
+                                throw new RuntimeException("SubmissionDTO 파싱 실패: " + s, e);
+                            }
+                        })
+                        .collect(Collectors.toList());
+            }
+            throw new IllegalArgumentException("submissionList는 String 타입이어야 합니다.");
+        } catch (Exception e) {
+            throw new RuntimeException("submissionList 파싱 중 에러", e);
+        }
+    }
 
     private <T> List<T> parseJsonStringList(List<String> jsonList, Class<T> clazz) {
         return jsonList.stream()
                 .map(json -> {
                     try {
+                        // 2단계: 이중으로 인코딩된 JSON 문자열을 다시 디코딩
                         return objectMapper.readValue(json, clazz);
                     } catch (JsonProcessingException e) {
                         throw new RuntimeException("JSON 파싱 실패: " + json, e);
