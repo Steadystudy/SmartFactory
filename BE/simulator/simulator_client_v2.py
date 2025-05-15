@@ -2,7 +2,6 @@ import simpy.rt
 import threading
 import time
 import math
-from collections import deque
 import websocket
 import json
 import random
@@ -10,6 +9,7 @@ from datetime import datetime
 import os
 # 최상단
 from dotenv import load_dotenv
+
 load_dotenv()  # .env 로부터 환경 변수 로드
 
 
@@ -25,6 +25,10 @@ simulation_started = False
 REQUEST_DIST = 1.9
 MAX_WAIT_BEFORE_IGNORE = 10.0
 AMR_WS_URL = os.getenv("AMR_WS_URL","ws://localhost:8080/ws/amr")
+PERSON_WS_URL = os.getenv("PERSON_WS_URL","ws://localhost:8080/ws/human")
+person=None
+person_ws = None
+
 if not AMR_WS_URL:
     raise RuntimeError("환경 변수 AMR_WS_URL 이 설정되지 않았습니다.")
 
@@ -110,7 +114,8 @@ def handle_map_info(data, ws):
 
 
 def handle_mission_assign(data):
-    print("[MISSION_ASSIGN] 미션 수신:", data)
+    if ("AMR009" == data['header']['amrId']):
+        print("[MISSION_ASSIGN] 미션 수신:", data)
     mission = data['body']
     target_amr_id = data['header']['amrId']
 
@@ -143,21 +148,21 @@ def handle_mission_assign(data):
             "missionId":   mission["missionId"],
             "missionType": mission["missionType"],
             "submissions": filtered_subs
-        }, replace=True)
-
-        print(f"✅ {amr.id} 새 미션 수락 완료 (sub {filtered_subs[0]['submissionId']}부터 수행)")
+        })
+        if ("AMR009" == data['header']['amrId']):
+            print(f"✅ {amr.id} 새 미션 수락 완료 (sub {filtered_subs[0]['submissionId']}부터 수행)")
         return
 
 
 
 def handle_mission_cancel(data):
-    print("[MISSION_CANCEL] 미션 취소 수신:", data)
+    if("AMR009" == data['header']['amrId']):
+        print("[MISSION_CANCEL] 미션 취소 수신:", data)
     target_amr_id = data['header']['amrId']
 
     for amr in amrs:
         if amr.id == target_amr_id:
             amr.interrupt_flag = True
-            amr.mission_queue.clear()
             amr.current_speed=0
             return
 
@@ -221,6 +226,7 @@ def compute_intersecting_edges(map_data):
 
 def start_simulation():
     global amrs  # ✅ 전역 변수 사용 선언!
+    global person
 
     if map_data is None:
         print("❌ 맵 데이터 없음. 시뮬레이션 시작할 수 없음.")
@@ -246,9 +252,11 @@ def start_simulation():
             print(f"[WARN] 시작 메시지 전송 실패: {e}")
 
     amrs = setup_amrs(env, map_data)  # ✅ 전역 amrs에 저장
+    person = setup_person(env)
 
     threading.Thread(target=broadcast_status, daemon=True).start()
     threading.Thread(target=lambda: env.run(), daemon=True).start()
+    threading.Thread(target=broadcast_person_status, daemon=True).start()
 
 
 # ---------- AMR 클래스 ----------
@@ -263,7 +271,7 @@ class AMR:
         self.state = 1  # 1: IDLE, 2: PROCESSING
         self.battery = random.randint(60, 100)
 
-        self.mission_queue = deque()
+        self.current_mission_data = None
         self.current_mission = None
         self.interrupt_flag = False
 
@@ -302,11 +310,10 @@ class AMR:
 
             }
 
-    def assign_mission(self, mission, replace=False):
-        if replace:
-            self.interrupt_flag = True
-            self.mission_queue.clear()
-        self.mission_queue.append(mission)
+    def assign_mission(self, mission):
+
+        self.interrupt_flag = True
+        self.current_mission_data = mission
 
     def run(self):
         while True:
@@ -314,8 +321,9 @@ class AMR:
                 self.interrupt_flag = False
                 self.current_mission = None
 
-            if not self.current_mission and self.mission_queue:
-                self.current_mission = self.mission_queue.popleft()
+            if self.current_mission_data:
+                self.current_mission = self.current_mission_data
+                self.current_mission_data = None
                 yield from self.process_mission(self.current_mission)
                 self.current_mission = None
             else:
@@ -372,6 +380,8 @@ class AMR:
         self.update_status()
 
     def move_to_node(self, node, edge, prev):
+        if(self.id == "AMR009"):
+            print("목표 노드: ", node["id"])
         # ─── 상수 정의 ─────────────────────────────────────
         STOP_DIST = 1.2
         RESUME_DIST = 1.7
@@ -655,7 +665,12 @@ def broadcast_status():
                     continue
 
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                for i, (amr_id, status) in enumerate(SHARED_STATUS.items()):
+                # SHARED_STATUS.items()를 리스트로 복사해두면 루프 도중 변경에도 안전합니다
+                for i, (entity_id, status) in enumerate(list(SHARED_STATUS.items())):
+                    # "battery"가 없는 엔트리(예: Person)는 건너뛴다
+                    if "battery" not in status:
+                        continue
+
                     message = {
                         "header": {
                             "msgName": "AMR_STATE",
@@ -670,7 +685,7 @@ def broadcast_status():
                             "battery": status["battery"],
                             "currentNode": status.get("currentNode", ""),
                             "currentEdge": status.get("currentEdge", ""),
-                            "loading": True if status["loaded"] else False,
+                            "loading": bool(status["loaded"]),
                             "missionId": status.get("missionId", ""),
                             "submissionId": status.get("submissionId", "0"),
                             "linearVelocity": status.get("speed", 0),
@@ -679,27 +694,171 @@ def broadcast_status():
                         }
                     }
 
+                    # AMR용 WebSocket 클라이언트에만 전송
                     if i < len(ws_clients):
                         try:
-                            # print(f"✅ [BROADCAST] amrId: {message['body']['amrId']}, x: {message['body']['worldX']}, y: {message['body']['worldY']}, currentNode: {message['body']['currentNode']}")
                             ws_clients[i].send(json.dumps(message))
                         except Exception as e:
-                            print(f"❌ [BROADCAST] WebSocket 전송 실패: {e}")
-                            print(f"❌ [BROADCAST] WebSocket 연결이 종료된 AMR: {amr_id}")
+                            print(f"❌ [BROADCAST] 전송 실패: {e}")
                             ws_clients[i].close()
 
             time.sleep(0.1)
 
         except Exception as global_exception:
-            print(f"❌ [BROADCAST] 스레드가 종료되었습니다: {global_exception}")
-            time.sleep(1)  # 잠시 대기 후 재시작
+            print(f"❌ [BROADCAST] 스레드 종료: {global_exception}")
+
+
+
+# ─── Person 클래스 수정 ────────────────────────────────
+class Person:
+    def __init__(self, env, person_id, start_x, start_y):
+        self.env = env
+        self.id = person_id
+        self.pos_x = start_x
+        self.pos_y = start_y
+        self.dir = 0                # 방향 추가
+        self.route = None
+        self.route_index = 0
+        self.go_back = False
+        self.state = 0
+
+    def update_status(self):
+        with LOCK:
+            SHARED_STATUS[self.id] = {
+                "id":  self.id,
+                "x":   self.pos_x,
+                "y":   self.pos_y,
+                "dir": self.dir,     # 방향 포함
+                "state": self.state,
+            }
+
+    def walk_to(self, tx, ty):
+        self.state=1
+        self.update_status()
+        # 방향 계산
+        dx = tx - self.pos_x
+        dy = ty - self.pos_y
+        angle_rad = math.atan2(dy, dx)
+        self.dir = (math.degrees(angle_rad) + 360) % 360
+
+        dist = math.hypot(dx, dy)
+        if dist < 1e-3:
+            return
+        steps = max(1, int(dist / (1.0 * REALTIME_INTERVAL)))
+        step_dx = dx / steps
+        step_dy = dy / steps
+        for _ in range(steps):
+            yield self.env.timeout(REALTIME_INTERVAL)
+            self.pos_x += step_dx
+            self.pos_y += step_dy
+            self.update_status()
+
+
+    def run(self):
+        while True:
+            if self.route:
+                target = self.route[self.route_index]
+                # 1) 목표 지점까지 이동
+                yield from self.walk_to(*target)
+
+                # 2) 도착 후 처리
+                if not self.go_back:
+                    # 순방향 끝점에 도달했을 때
+                    if self.route_index == len(self.route) - 1:
+                        # 5초 대기
+                        self.state=2
+                        self.update_status()
+                        wait_steps = int(5.0 / REALTIME_INTERVAL)
+                        for _ in range(wait_steps):
+                            yield self.env.timeout(REALTIME_INTERVAL)
+                        self.go_back = True
+                        self.route_index -= 1
+                    else:
+                        self.route_index += 1
+                else:
+                    # 되돌아가기 중
+                    if self.route_index == 0:
+                        # 돌아오기 완료
+                        self.route = None
+                        self.go_back = False
+                        self.state=0
+                        self.update_status()
+                    else:
+                        self.route_index -= 1
+            else:
+                yield self.env.timeout(REALTIME_INTERVAL)
+
+# ─── WebSocket 메시지 핸들러에 경로 트리거 추가 ─────────────────
+def on_person_open(ws):
+    print("Person 연결됨")
+
+def on_person_message(ws, message):
+    global person
+    try:
+        data = json.loads(message)
+        if data.get("header", {}).get("msgName") == "MOVE_TRIGGER":
+            # 경로 설정: 79,65 -> 69,65 -> 69,52.5 -> 68.5,52.5
+            person.route = [
+                (79.0, 65.0),
+                (69.0, 65.0),
+                (69.0, 52.5),
+                (68.5, 52.5)
+            ]
+            person.route_index = 0
+            person.go_back = False
+            print("🙋 Person: 이동 경로 설정 완료!")
+    except Exception as e:
+        print("❌ Person 메시지 처리 오류:", e)
+
+# ─── PERSON_WS 설정에서 on_message에 연결 ─────────────────
+def setup_person(env):
+    p = Person(env, "PERSON001", start_x=79.0, start_y=65.0)
+    p.update_status()
+    env.process(p.run())
+    return p
+# ─── 2) 브로드캐스트 루프 추가 ────────────────────────────────
+def broadcast_person_status():
+    global person_ws
+    while True:
+        with LOCK:
+            status = SHARED_STATUS.get(person.id)
+        if status:
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            message = {
+                "header": {
+                    "msgName": "HUMAN_STATE",
+                    "time": now
+                },
+                "body": {
+                    "worldX":  status["x"],
+                    "worldY":  status["y"],
+                    "dir":     status["dir"],
+                    "humanId": status["id"],
+                    "state": status["state"],
+                }
+            }
+            try:
+                person_ws.send(json.dumps(message))
+            except Exception:
+                pass
+        time.sleep(0.1)
+
 
 
 # ---------- 메인 ----------
 if __name__ == '__main__':
-    env = simpy.rt.RealtimeEnvironment(factor=1.0, strict=False)
+    env = simpy.rt.RealtimeEnvironment(factor=0.5, strict=False)
     for ws in ws_clients:
         threading.Thread(target=ws.run_forever, daemon=True).start()
+
+    person_ws = websocket.WebSocketApp(
+        PERSON_WS_URL,
+        on_open=on_person_open,
+        on_message=on_person_message,
+        on_close=lambda ws, code, msg: print("🙋 Person 연결 해제")
+    )
+    threading.Thread(target=person_ws.run_forever, daemon=True).start()
+
 
     # 🔒 메인 스레드가 종료되지 않도록 유지
     while True:
