@@ -14,15 +14,25 @@ public class StatusWebSocketController {
 
     // 클라이언트가 /app/amr/{amrId}로 요청을 보내면 push 시작
     @MessageMapping("/amr/route/{amrId}")
-    public void subscribeAmr(@DestinationVariable String amrId) {
-        System.out.println("route 구독 "+amrId);
+    public void subscribeAmr(@DestinationVariable String amrId,
+                             SimpMessageHeaderAccessor headerAccessor) {
         statusWebSocketService.getRouteStatus(amrId);
     }
 
     @MessageMapping("/amr/route/{amrId}/unsubscribe")
     public void unsubscribeAmr(@DestinationVariable String amrId,
                                SimpMessageHeaderAccessor headerAccessor) {
-        System.out.println("route 구독 취소"+amrId);
         statusWebSocketService.stopPushing(amrId);
+    }
+
+    // 클라이언트가 /app/amr/{amrId}로 요청을 보내면 push 시작
+    @MessageMapping("/amr/human")
+    public void subscribeHuman(SimpMessageHeaderAccessor headerAccessor) {
+        statusWebSocketService.startHumanPushing(headerAccessor.getSessionId());
+    }
+
+    @MessageMapping("/amr/human/unsubscribe")
+    public void unsubscribeHuman(SimpMessageHeaderAccessor headerAccessor) {
+        statusWebSocketService.stopHumanPushing(headerAccessor.getSessionId());
     }
 }

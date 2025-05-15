@@ -215,7 +215,6 @@ public class StatusServiceImpl implements StatusService{
             Edge edge = edgeMap.get(edgeId);
             if (edge == null) continue;
 
-
             heatMapList.add(new HeatMapResponseDTO.HeatMapDTO(
                     nodeMap.get(edge.getNode1().getNodeId()).getX(),
                     nodeMap.get(edge.getNode1().getNodeId()).getY(),

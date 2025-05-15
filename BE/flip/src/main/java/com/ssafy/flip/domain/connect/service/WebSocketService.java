@@ -9,8 +9,6 @@ public interface WebSocketService {
 
     String sendMapInfo();
 
-    String missionAssign(String amrId);
-
     void sendMission(String amrId, MissionResponse res);
 
     void registerSession(String amrId, WebSocketSession session);
