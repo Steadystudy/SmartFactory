@@ -73,11 +73,11 @@ const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
 // 2D 맵과 AMR을 포함하는 컴포넌트
 const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
   const { models } = useModelStore();
-  const { controlsRef } = useCameraFollow({ is2D: true });
+  const { controlsRef } = useCameraFollow();
 
   const BOUNDS = {
     MIN: 0,
-    MAX: 80
+    MAX: 80,
   } as const;
 
   const clamp = (value: number, min: number, max: number) => {
@@ -86,14 +86,14 @@ const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
 
   useFrame(() => {
     if (!controlsRef.current) return;
-    
+
     const camera = controlsRef.current.object;
     const target = controlsRef.current.target;
-    
+
     // X, Z축 제한
     target.x = clamp(target.x, BOUNDS.MIN, BOUNDS.MAX);
     target.z = clamp(target.z, BOUNDS.MIN, BOUNDS.MAX);
-    
+
     // 카메라 위치도 제한
     camera.position.x = clamp(camera.position.x, BOUNDS.MIN, BOUNDS.MAX);
     camera.position.z = clamp(camera.position.z, BOUNDS.MIN, BOUNDS.MAX);
@@ -140,17 +140,20 @@ const Scene2DViewer = () => {
   };
 
   return (
-    <div className='w-full h-full cursor-grab active:cursor-grabbing relative' onClick={handleCanvasClick}>
-      <div className='absolute top-4 right-4 z-10'>
+    <div
+      className='relative w-full h-full cursor-grab active:cursor-grabbing'
+      onClick={handleCanvasClick}
+    >
+      <div className='absolute z-10 top-4 right-4'>
         <Button
-          variant="outline"
+          variant='outline'
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
             setShowHeatmap(!showHeatmap);
           }}
-          className="bg-black/50 text-white hover:bg-white/50 flex items-center gap-2 cursor-pointer"
+          className='flex items-center gap-2 text-white cursor-pointer bg-black/50 hover:bg-white/50'
         >
-          {showHeatmap ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          {showHeatmap ? <Eye className='w-4 h-4' /> : <EyeOff className='w-4 h-4' />}
           <span>{showHeatmap ? '이동 빈도 OFF' : '이동 빈도 ON'}</span>
         </Button>
       </div>
