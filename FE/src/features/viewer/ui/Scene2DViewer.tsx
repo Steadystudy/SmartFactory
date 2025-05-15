@@ -9,7 +9,6 @@ import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { Map3D } from '@/entities/map';
 import { useAMRAnimation, useCameraFollow, AMR_STATE_COLORS } from '../lib';
 import { HeatmapLayer } from '@/features/heatmap/ui/HeatmapLayer';
-import { HeatmapController } from '@/features/heatmap/ui/HeatmapController';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
@@ -101,7 +100,6 @@ const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
 
   return (
     <>
-      {showHeatmap && <HeatmapController />}
       {models.map((amrInfo) => (
         <AMR2DRenderer
           key={amrInfo.amrId}

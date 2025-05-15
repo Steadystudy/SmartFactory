@@ -1,11 +1,10 @@
-import { HeatmapPoint } from '@/shared/store/heatmap-store';
+import { HeatmapEdge } from '../model/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_SERVER;
 
-export const fetchHeatmapData = async (): Promise<HeatmapPoint[]> => {
+export const fetchHeatmapData = async (): Promise<HeatmapEdge[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/status/heatmap`);
-    console.log(response);
     if (!response.ok) {
       throw new Error('Failed to fetch heatmap data');
     }
