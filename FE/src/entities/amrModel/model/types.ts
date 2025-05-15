@@ -59,7 +59,6 @@ export interface Model3DProps {
   position: [number, number, number];
   rotation: [number, number, number];
   scene: Group<Object3DEventMap>;
-  onClick?: () => void;
   className?: string;
   amrState: AMR_CURRENT_STATE;
 }

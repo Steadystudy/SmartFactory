@@ -8,7 +8,6 @@ import * as THREE from 'three';
 
 export const AMRModel = (props: Omit<Model3DProps, 'scene'>) => {
   const { scene, animations } = useGLTF('/SSF-150.glb');
-  const { actions } = useAnimations(animations, scene);
   const {
     amrState: { loading, amrId },
   } = props;
@@ -21,7 +20,8 @@ export const AMRModel = (props: Omit<Model3DProps, 'scene'>) => {
       }
     });
     return clonedScene;
-  }, [scene, loading]);
+  }, [scene]);
+  const { actions } = useAnimations(animations, instance);
 
   useEffect(() => {
     // 이전 애니메이션 중지
@@ -44,5 +44,3 @@ export const AMRModel = (props: Omit<Model3DProps, 'scene'>) => {
     </>
   );
 };
-
-useGLTF.preload('/SSF-150.glb');
