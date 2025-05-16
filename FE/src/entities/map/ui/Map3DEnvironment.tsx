@@ -24,6 +24,14 @@ export const Map3D = () => {
     });
   }, [actions, lines]);
 
+  useEffect(() => {
+    Object.values(actions).forEach((action) => {
+      if (!action?.getClip().name.includes('Line')) {
+        action?.play();
+      }
+    });
+  }, [actions, lines]);
+
   return (
     <>
       {/* 공장 모델 */}

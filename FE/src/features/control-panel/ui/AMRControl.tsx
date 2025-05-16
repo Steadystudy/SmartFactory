@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AMR_CARD_STATUS } from '../model';
 import { useAmrSocketStore } from '@/shared/store/amrSocket';
 import { MissionCard } from './MissionCard';
@@ -21,15 +21,13 @@ export default function AMRControl() {
   const [data, setData] = useState<AMR_CARD_STATUS[]>([]);
   const { amrSocket, isConnected } = useAmrSocketStore();
 
-  const filteredData = useMemo(() => {
-    return data.filter((amr) => {
-      const missionMatch = missionFilter === FILTER_ALL || amr.missionType === missionFilter;
-      const amrMatch = amrFilter === FILTER_ALL || amr.type === amrFilter;
-      const stateMatch = stateFilter === FILTER_ALL || amr.state === Number(stateFilter);
+  const filteredData = data.filter((amr) => {
+    const missionMatch = missionFilter === FILTER_ALL || amr.missionType === missionFilter;
+    const amrMatch = amrFilter === FILTER_ALL || amr.type === amrFilter;
+    const stateMatch = stateFilter === FILTER_ALL || amr.state === Number(stateFilter);
 
-      return missionMatch && amrMatch && stateMatch;
-    });
-  }, [missionFilter, amrFilter, stateFilter, data]);
+    return missionMatch && amrMatch && stateMatch;
+  });
 
   useEffect(() => {
     if (!isConnected || !amrSocket) return;
@@ -84,7 +82,7 @@ export default function AMRControl() {
         </Select>
       </div>
 
-      <div className='flex flex-col h-full mt-2 overflow-y-auto hide-scrollbar'>
+      <div className='flex flex-col h-full p-1 mt-1 overflow-y-auto hide-scrollbar'>
         {filteredData.map((amr) => (
           <MissionCard key={amr.amrId} data={amr} />
         ))}
