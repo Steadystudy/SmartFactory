@@ -227,6 +227,11 @@ public class StatusServiceImpl implements StatusService{
         return new HeatMapResponseDTO(heatMapList);
     }
 
+    @Override
+    public void brokeLine() {
+        lineService.brokeLine(10L);
+    }
+
     private Map<Integer, Long> groupMissionLogsByHour(List<MissionLog> missionLogs) {
         return missionLogs.stream()
                 .collect(Collectors.groupingBy(

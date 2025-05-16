@@ -285,10 +285,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     trigger.run(payload);
 
                     if (missionToLine.containsKey(missionId)) {
-                        statusService.saveLine(new LineSaveRequestDTO(
-                                missionToLine.get(missionId),
-                                25.0F,
-                                true));
+                        statusService.saveLine(missionToLine.get(missionId));
                     }
                 }
 

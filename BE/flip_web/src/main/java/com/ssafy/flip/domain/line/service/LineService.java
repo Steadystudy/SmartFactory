@@ -14,4 +14,5 @@ public interface LineService {
 
     Line getLine(Long id);
 
+    void brokeLine(Long id);
 }
