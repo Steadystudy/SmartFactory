@@ -57,7 +57,13 @@ public class LineServiceImpl implements LineService {
         redisTemplate.opsForValue().set(redisKey, now);
     }
 
+    @Override
+    public void brokeLine(Long id) {
+        Line line = lineRepository.findById(id)
+                .orElseThrow();
 
+        line.brokeLine();
 
+    }
 
 }

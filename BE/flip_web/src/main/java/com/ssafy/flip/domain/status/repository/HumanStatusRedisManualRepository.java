@@ -14,7 +14,6 @@ public class HumanStatusRedisManualRepository {
     private final RedisTemplate<String, String> redisTemplate;
 
     public HumanStatusRedis findAllHumanStatus() {
-
         String key = "HUMAN_STATUS:HUMAN001";
         Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
 
