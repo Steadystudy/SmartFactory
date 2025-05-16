@@ -44,7 +44,7 @@ export default function AMRControl() {
     <div className='flex flex-col grow p-2 bg-[#0B1120] '>
       <div className='flex w-full gap-2 mb-2 overscroll-none'>
         <Select onValueChange={setMissionFilter} defaultValue={FILTER_ALL}>
-          <SelectTrigger className='w-[120px] text-white'>
+          <SelectTrigger className='w-full text-white'>
             <SelectValue placeholder='Mission' />
           </SelectTrigger>
           <SelectContent>
@@ -57,7 +57,7 @@ export default function AMRControl() {
         </Select>
 
         <Select onValueChange={setAmrFilter} defaultValue={FILTER_ALL}>
-          <SelectTrigger className='w-[120px] text-white'>
+          <SelectTrigger className='w-full text-white'>
             <SelectValue placeholder='AMR' />
           </SelectTrigger>
           <SelectContent>
@@ -71,7 +71,7 @@ export default function AMRControl() {
         </Select>
 
         <Select onValueChange={setStateFilter} defaultValue={FILTER_ALL}>
-          <SelectTrigger className='w-[120px] text-white'>
+          <SelectTrigger className='w-full text-white'>
             <SelectValue placeholder='State' />
           </SelectTrigger>
           <SelectContent>
@@ -84,7 +84,7 @@ export default function AMRControl() {
         </Select>
       </div>
 
-      <div className='flex flex-col mt-4 h-[85%] overflow-y-scroll hide-scrollbar'>
+      <div className='flex flex-col h-full mt-2 overflow-y-auto hide-scrollbar'>
         {filteredData.map((amr) => (
           <MissionCard key={amr.amrId} data={amr} />
         ))}
