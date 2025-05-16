@@ -2,17 +2,72 @@
 
 import { Canvas } from '@react-three/fiber';
 import { MapControls } from '@react-three/drei';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { Map3D, MapLoading } from '@/entities/map';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { Model3DRenderer } from '@/entities/amrModel';
 import { useCameraFollow } from '../lib';
 import { MapPointer } from '@/entities/3dPointer';
 import { RoutePath } from './RoutePath';
+import * as THREE from 'three';
 
 const Warehouse = () => {
   const { selectedAmrId, startX, startY, targetX, targetY } = useSelectedAMRStore();
   const { controlsRef } = useCameraFollow();
+  const lastValidTarget = useRef<THREE.Vector3>(new THREE.Vector3(40, 0, 40));
+  const isUpdating = useRef(false);
+
+  useEffect(() => {
+    if (!controlsRef.current) return;
+
+    const controls = controlsRef.current;
+    
+    lastValidTarget.current.copy(controls.target);
+    
+    const handleControlChange = () => {
+      if (isUpdating.current) return;
+      
+      const camera = controls.object;
+      const currentTarget = controls.target;
+      
+      if (currentTarget.x < 5 || currentTarget.x > 75 || 
+          currentTarget.z < 5 || currentTarget.z > 75) {
+        isUpdating.current = true;
+        
+        const cameraOffset = new THREE.Vector3().subVectors(camera.position, currentTarget);
+        
+        const newTargetX = Math.max(0, Math.min(80, currentTarget.x));
+        const newTargetZ = Math.max(0, Math.min(80, currentTarget.z));
+        const newTarget = new THREE.Vector3(
+          newTargetX,
+          currentTarget.y,
+          newTargetZ
+        );
+        
+        const newCameraPosition = new THREE.Vector3().addVectors(newTarget, cameraOffset);
+        
+        controls.target.copy(newTarget);
+        camera.position.copy(newCameraPosition);
+        
+        camera.updateProjectionMatrix();
+        controls.update();
+        
+        lastValidTarget.current.copy(newTarget);
+        
+        setTimeout(() => {
+          isUpdating.current = false;
+        }, 0);
+      } else {
+        lastValidTarget.current.copy(currentTarget);
+      };
+    };
+    
+    controls.addEventListener('change', handleControlChange);
+    
+    return () => {
+      controls.removeEventListener('change', handleControlChange);
+    };
+  }, [controlsRef]);
 
   return (
     <>
