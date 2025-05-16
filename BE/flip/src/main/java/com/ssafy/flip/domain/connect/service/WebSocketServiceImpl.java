@@ -98,14 +98,15 @@ public class WebSocketServiceImpl implements WebSocketService {
                 String edgeId = edgeService.getEdgeKeyToIdMap().getOrDefault(edgeKey, "UNKNOWN");
 
                 if ("UNKNOWN".equals(edgeId)) {
-                    log.error("❗ 존재하지 않는 edgeKey: {}", edgeKey);
+                    log.error("❗ 존재하지 않는 edgeKey: {} AMRID {} ", edgeKey,amrId);
                     // 예외를 던지거나 기본값으로 처리
                     throw new IllegalArgumentException("Invalid edgeKey: " + edgeKey);
                 }
 
                 int submissionId = startSubmissionId + (i);
                 submissions.add(new MissionAssignDTO.SubmissionDTO(
-                        String.valueOf(submissionId),
+                        //String.valueOf(submissionId),
+                        String.valueOf(i),
                         String.valueOf(curr),
                         edgeId));
             }
@@ -118,7 +119,7 @@ public class WebSocketServiceImpl implements WebSocketService {
             );
             
             String payload = objectMapper.writeValueAsString(missionAssignDTO);
-            System.out.println("payload는 이값입니다 : "+payload);
+            //log.info("payload는 이값입니다 : {}",payload);
             WebSocketSession session = amrSessions.get(amrId);
 
             if (session != null && session.isOpen()) {

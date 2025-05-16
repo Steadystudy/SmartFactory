@@ -80,8 +80,9 @@ public class AlgorithmResultConsumer {
                 // 두 번째 미션은 해시맵에 저장
                 if (split.size() > 1) {
                     MissionResponse delayed = split.get(1);
+                    getDelayedMissionMap().remove(res.getAmrId());
                     delayedMissionMap.put(delayed.getAmrId(), delayed);
-                    log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
+                    //log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
                 }
             }
 
@@ -94,6 +95,7 @@ public class AlgorithmResultConsumer {
     }
     public void sendCancelMission(String amrId) {
         try {
+            getDelayedMissionMap().remove(amrId);
             Map<String, Object> header = new LinkedHashMap<>();
             header.put("msgName", "MISSION_CANCEL");
             header.put("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
@@ -128,7 +130,6 @@ public class AlgorithmResultConsumer {
         String key = "AMR_STATUS:" + amrId;
         redis.opsForHash().put(key, "missionId", String.valueOf(res.getMissionId()));
         redis.opsForHash().put(key, "missionType", String.valueOf(res.getMissionType()));
-        redis.opsForHash().put(key, "submissionList", mapper.writeValueAsString(res.getRoute()));
 
         ws.sendMission(amrId, res);
 
@@ -215,7 +216,7 @@ public class AlgorithmResultConsumer {
 
     public void sendWebTrigger() throws JsonProcessingException {
         String payload = mapper.writeValueAsString(amrMissionList.values().stream().toList());
-        log.info("✅ Web Trigger 전송: {}", payload);
+        //log.info("✅ Web Trigger 전송: {}", payload);
         webTriggerProducer.run(payload);
     }
 }
