@@ -21,49 +21,49 @@ const Warehouse = () => {
     if (!controlsRef.current) return;
 
     const controls = controlsRef.current;
-    
+
     lastValidTarget.current.copy(controls.target);
-    
+
     const handleControlChange = () => {
       if (isUpdating.current) return;
-      
+
       const camera = controls.object;
       const currentTarget = controls.target;
-      
-      if (currentTarget.x < 5 || currentTarget.x > 75 || 
-          currentTarget.z < 5 || currentTarget.z > 75) {
+
+      if (
+        currentTarget.x < 5 ||
+        currentTarget.x > 75 ||
+        currentTarget.z < 5 ||
+        currentTarget.z > 75
+      ) {
         isUpdating.current = true;
-        
+
         const cameraOffset = new THREE.Vector3().subVectors(camera.position, currentTarget);
-        
+
         const newTargetX = Math.max(0, Math.min(80, currentTarget.x));
         const newTargetZ = Math.max(0, Math.min(80, currentTarget.z));
-        const newTarget = new THREE.Vector3(
-          newTargetX,
-          currentTarget.y,
-          newTargetZ
-        );
-        
+        const newTarget = new THREE.Vector3(newTargetX, currentTarget.y, newTargetZ);
+
         const newCameraPosition = new THREE.Vector3().addVectors(newTarget, cameraOffset);
-        
+
         controls.target.copy(newTarget);
         camera.position.copy(newCameraPosition);
-        
+
         camera.updateProjectionMatrix();
         controls.update();
-        
+
         lastValidTarget.current.copy(newTarget);
-        
+
         setTimeout(() => {
           isUpdating.current = false;
         }, 0);
       } else {
         lastValidTarget.current.copy(currentTarget);
-      };
+      }
     };
-    
+
     controls.addEventListener('change', handleControlChange);
-    
+
     return () => {
       controls.removeEventListener('change', handleControlChange);
     };
@@ -75,13 +75,17 @@ const Warehouse = () => {
       <Model3DRenderer />
 
       {/* 출발지 표시 (파란색 구체) */}
-      {selectedAmrId && <MapPointer position={[startX!, 3, startY!]} color='Blue' />}
+      {selectedAmrId && startX && startY && (
+        <MapPointer position={[startX, 3, startY]} color='Blue' />
+      )}
 
       {/* 도착지 표시 (빨간색 구체) */}
-      {selectedAmrId && <MapPointer position={[targetX!, 3, targetY!]} color='Red' />}
+      {selectedAmrId && targetX && targetY && (
+        <MapPointer position={[targetX, 3, targetY]} color='Red' />
+      )}
 
       {/* Route 경로 시각화 */}
-      <RoutePath />
+      {selectedAmrId && <RoutePath />}
 
       <MapControls
         ref={controlsRef}

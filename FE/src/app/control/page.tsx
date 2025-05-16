@@ -17,7 +17,7 @@ const StompClientConfig = {
 };
 
 export default function ControlPage() {
-  const { setAmrSocket, setIsConnected } = useAmrSocketStore();
+  const { setAmrSocket, setIsConnected, reset } = useAmrSocketStore();
 
   useEffect(() => {
     const socket = new SockJS(SOCKET_URL + '/status');
@@ -30,7 +30,11 @@ export default function ControlPage() {
         setIsConnected(true);
       },
       onDisconnect: () => {
-        setIsConnected(false);
+        console.log('disconnected');
+        reset();
+      },
+      onStompError: (error) => {
+        console.log('stomp error', error);
       },
     });
 
@@ -38,9 +42,11 @@ export default function ControlPage() {
     setAmrSocket(client);
 
     return () => {
+      reset();
+      client.deactivate();
       socket.close();
     };
-  }, [setAmrSocket, setIsConnected]);
+  }, [setAmrSocket, setIsConnected, reset]);
 
   return (
     <div className='flex h-screen'>

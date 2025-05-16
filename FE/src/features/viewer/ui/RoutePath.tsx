@@ -46,6 +46,15 @@ export const RoutePath = () => {
 
       urlRef.current = destination;
     }
+    return () => {
+      if (urlRef.current) {
+        amrSocket.publish({
+          destination: urlRef.current + '/unsubscribe',
+        });
+        amrSocket.unsubscribe(urlRef.current);
+        setRoute([]);
+      }
+    };
   }, [selectedAmrId, amrSocket, isConnected]);
 
   if (!route || route.length < 1) return null;
