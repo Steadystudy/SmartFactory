@@ -62,13 +62,13 @@ public class AlgorithmResultConsumer {
             log.info("✅ Kafka 결과 수신: triggeredAmr={}, 총 {}개", triggeredAmr, responses.size());
 
             // ✅ 미션 취소 (trigger된 AMR이 있는 경우)
-            if (triggeredAmr != null) {
-                for (MissionResponse res : responses) {
-                    if (!triggeredAmr.equals(res.getAmrId())) {
-                        sendCancelMission(res.getAmrId());
-                    }
-                }
-            }
+//            if (triggeredAmr != null) {
+//                for (MissionResponse res : responses) {
+//                    if (!triggeredAmr.equals(res.getAmrId())) {
+//                        sendCancelMission(res.getAmrId());
+//                    }
+//                }
+//            }
 
             for (MissionResponse res : responses) {
                 List<MissionResponse> split = splitRoute(res);
@@ -112,7 +112,9 @@ public class AlgorithmResultConsumer {
             WebSocketSession session = ws.getAmrSessions().get(amrId);
 
             if (session != null && session.isOpen()) {
-                session.sendMessage(new TextMessage(json));
+                synchronized (session) {  // 🛡️ 동시성 제어
+                    session.sendMessage(new TextMessage(json));
+                }
                 log.info("📤 MISSION_CANCEL 전송 완료: AMR = {}, Payload = {}", amrId, json);
             } else {
                 log.warn("❗ WebSocket 세션 없음: AMR = {}", amrId);
@@ -122,6 +124,7 @@ public class AlgorithmResultConsumer {
             log.error("❗ MISSION_CANCEL 전송 실패: AMR = {}", amrId, e);
         }
     }
+
 
 
     // ✅ 미션 즉시 실행 로직 (WebSocket 전송 포함)
