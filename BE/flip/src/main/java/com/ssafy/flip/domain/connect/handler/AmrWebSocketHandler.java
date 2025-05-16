@@ -256,10 +256,11 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 if (delayed != null) {
                     //log.info("🏁 2번째 미션 시작 : {}", amrId);
                     //REdis에 미션 시간을 저장하자
+                    log.info(" 2번쨰 미션 첫번쨰 값 {} ",delayed.getRoute().getFirst());
                     if ((11<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=20) ||(31<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=40)){
                         lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getFirst()));
                     }
-                    else if ((21<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=30) ||(41<=delayed.getRoute().getLast() && delayed.getRoute().getFirst()<=50)){
+                    else if ((21<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=30) ||(41<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=50)){
                         lineService.updateMissionAssignment(String.valueOf(delayed.getRoute().getFirst()));
                     }
 
