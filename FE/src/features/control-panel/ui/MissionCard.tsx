@@ -43,6 +43,13 @@ export const MissionCard = ({ data }: MissionCardProps) => {
     }
   };
 
+  useEffect(() => {
+    if (selectedAmrId === data.amrId) {
+      setStartPosition(data.startX, data.startY);
+      setTargetPosition(data.targetX, data.targetY);
+    }
+  }, [data, selectedAmrId, setStartPosition, setTargetPosition]);
+
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -84,8 +91,8 @@ export const MissionCard = ({ data }: MissionCardProps) => {
   return (
     <Card
       className={cn(
-        'bg-white/10 w-full p-4 mb-4 cursor-pointer transition-colors',
-        selectedAmrId === data.amrId && 'border-2 border-blue-500',
+        'bg-white/10 w-full p-4 mb-4 cursor-pointer transition-colors rounded-lg',
+        selectedAmrId === data.amrId && 'outline-2 outline-blue-500 ',
       )}
       onClick={handleCardClick}
     >
