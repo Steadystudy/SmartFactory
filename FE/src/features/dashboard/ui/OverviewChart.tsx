@@ -1,14 +1,22 @@
 'use client';
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ProductionOverviewData } from '../model/types';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+import { useFetchDashboardChart } from '@/features/dashboard/api/dashboard';
 
-export default function OverviewChart({ timestamps, production, target }: ProductionOverviewData) {
-  const chartData = timestamps.map((timestamp, i) => ({
-    name: `${timestamp}시`,
-    production: production[i],
-    target: target[i],
-  }));
+export default function OverviewChart() {
+  const { data: chartData, isLoading } = useFetchDashboardChart();
+
+  if (isLoading) return <div className='text-white'>차트 로딩 중...</div>;
+  if (!chartData) return <div className='text-white'>차트 데이터 없음</div>;
 
   return (
     <div className='flex flex-col h-[460px] p-6 bg-[#020817]/50 backdrop-blur-md rounded-xl border border-blue-900/20'>
@@ -27,26 +35,19 @@ export default function OverviewChart({ timestamps, production, target }: Produc
             }}
           >
             <CartesianGrid strokeDasharray='3 3' stroke='#1F2937' />
-            <XAxis 
-              dataKey='name' 
-              stroke='#6B7280'
-              tick={{ fill: '#6B7280' }}
-            />
-            <YAxis 
-              stroke='#6B7280'
-              tick={{ fill: '#6B7280' }}
-            />
-            <Tooltip 
-              contentStyle={{ 
+            <XAxis dataKey='name' stroke='#6B7280' tick={{ fill: '#6B7280' }} />
+            <YAxis stroke='#6B7280' tick={{ fill: '#6B7280' }} />
+            <Tooltip
+              contentStyle={{
                 backgroundColor: '#1F2937',
                 border: 'none',
                 borderRadius: '0.5rem',
-                color: '#F3F4F6'
+                color: '#F3F4F6',
               }}
             />
-            <Legend 
+            <Legend
               wrapperStyle={{
-                color: '#6B7280'
+                color: '#6B7280',
               }}
             />
             <Line
