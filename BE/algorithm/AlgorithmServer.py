@@ -15,15 +15,15 @@ import json
 
 def fetch_robot_list() -> list[tuple[str, int, int]]:
     robot_list = []
+    ban_work_list = []
     for i in range(1, 21):
         key = f"AMR_STATUS:AMR{i:03}"
         if not r.exists(key):
             continue
-
+        
         h = r.hgetall(key)
         amr_id = h.get("amrId", f"AMR{i:03}")
-        current_node = int(h.get("currentNode", 0))
-        node_id = current_node  # 기본값
+        
 
 
         # submissionList가 존재할 때 처리
@@ -34,34 +34,38 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
                 submission_nodes = [s.get("submissionNode") for s in submission_list]
 
                 # currentNode가 submissionList에 있다면, 그 다음 submissionNode 사용
-                if current_node in submission_nodes:
-                    idx = submission_nodes.index(current_node)
-                    if idx + 1 < len(submission_nodes):
-                        node_id = int(submission_nodes[idx + 1])
+                if len(submission_nodes)!=0:
+                    node_id = submission_nodes[int(h.get("submissionId", 0))]
                 else:
-                    # currentNode가 목록에 없을 경우 → 처음 submissionNode 유지 (또는 그대로)
+                    node_id = int(h.get("currentNode"))  # 기본값
                     pass  # 그대로 current_node 유지
 
             except Exception as e:
                 pass
-        if i == testNumber:
-            print("계산전 current 와 노드 id 와",current_node,node_id,int(h.get("submissionId", 0)))
+        # if i == testNumber:
+        #     print(f"계산전 current 노드와 노드 id 와",current_node,node_id,submission_nodes,int(h.get("submissionId", 0)))
+        
+        #loading = 1 if str(h.get("missionType", "")).upper() in ("UNLOADING", "CHARGING") else 0
+        loading = 1 if str(h.get("loading", "")).lower() in ("true") else 0
+        if not(1<=node_id<=10 or 21<=node_id<=30 or 41<=node_id<=50):
+            robot_list.append((amr_id, node_id, loading))
+        else:
+            ban_work_list.append(node_id)
 
-        loading = 1 if str(h.get("missionType", "")).upper() in ("UNLOADING", "CHARGING") else 0
-        robot_list.append((amr_id, node_id, loading))
-
-    return robot_list
+    return robot_list,ban_work_list
 
 
 
 
-def fetch_line_status() -> list[tuple[int, float]]:
+def fetch_line_status(banlist) -> list[tuple[int, float]]:
     """
     Redis 키 MISSION_PT:11~50 에 저장된 ISO8601 문자열 → 현재시각과의 차이를 점수로 사용
     """
     now = datetime.now()
     line_status = []
     for node in range(11, 51):
+        if node in banlist:
+            continue
         key = f"MISSION_PT:{node}"
         if r.exists(key):
             ts_raw = r.get(key)
@@ -115,7 +119,7 @@ def listen_loop():
             continue
 
         raw_value = msg.value().decode('utf-8')
-        print("✅ Received:", repr(raw_value))
+        #print("✅ Received:", repr(raw_value))
 
         # ✅ JSON 형식 아님 → 단순 문자열일 수 있음
         if not raw_value.strip().startswith("{"):
@@ -141,32 +145,88 @@ def listen_loop():
             else:
                 triggered_amr = payload.get("body", {}).get("amrId", None)
                 if triggered_amr:
-                    print(f"🎯 Triggered AMR: {triggered_amr}")
+                    pass
+                    #print(f"🎯 Triggered AMR: {triggered_amr}")
                 else:
                     print("⚠️ triggered AMR ID가 없음 → 알고리즘 실행 생략")
                     continue
 
         # ✅ 알고리즘 실행 부분 공통
-        robot   = fetch_robot_list()
-        jobs    = fetch_line_status()
+        robot,banlist   = fetch_robot_list()
+        jobs    = fetch_line_status(banlist)
         assign  = api.assign_tasks(robot, jobs)
 
         all_results = []
-        for (amr_id, _, _), (dest, _), type, path, cost in assign:
+        for (amr_id, _, _), (dest, _), mission_type, path, cost in assign:
             if cost >= 900 or path is None:
+                print(cost," 코스트 넘치거나",path,"경로가 업음")
                 continue
+
+            # firstNode=path[0]
+            # if 1<=firstNode<=10 or 21<=firstNode<=30 or 41<=firstNode<=50:
+            #     key = f"AMR_STATUS:{amr_id}"
+            #     h = r.hgetall(key)
+            #     current_node = int(h.get("currentNode", 0))
+            #     path.insert(0, current_node)
+
+            key = f"AMR_STATUS:{amr_id}"
+            h = r.hgetall(key)
+            
+            if "submissionList" in h:
+                # try:
+                    raw_value = h["submissionList"]
+                    raw_list = json.loads(raw_value)
+
+                    submission_list = []
+                    for s in raw_list:
+                        if isinstance(s, str):
+                            try:
+                                parsed = json.loads(s)
+                                submission_list.append(parsed)
+                            except Exception:
+                                continue
+                        elif isinstance(s, dict):
+                            submission_list.append(s)
+                        elif isinstance(s, int):
+                            submission_list.append({"submissionNode": s})
+
+                    submission_nodes = [s.get("submissionNode") for s in submission_list if s.get("submissionNode") is not None]
+                    print(amr_id)
+                    if int(h.get("submissionId"))==0:
+                        print(f"현재 노드,다음 목적지 노드 , 서브 미션 노드 , 서브미션ID",int(h.get("currentNode", 0)),int(h.get("currentNode", 0)),submission_nodes,int(h.get("submissionId", 0)))
+                    else:
+                        print(f"현재 노드,다음 목적지 노드 , 서브 미션 노드 , 서브미션ID",int(h.get("currentNode", 0)),submission_nodes[int(h.get("submissionId", 0))],submission_nodes,int(h.get("submissionId", 0)))
+                    if len(submission_list)!=0:
+                        submission_nodes = submission_nodes[:int(h.get("submissionId", 0))]
+                    #if amr_id==f"AMR{testNumber:03}":
+                    print("이전 서브리스트",submission_nodes)
+                    print("알고리즘 서버 정답 :",path)
+                    path=submission_nodes+path
+                    #if amr_id==f"AMR{testNumber:03}":
+                    print("최종 루트",path)
+
+                # except Exception as e:
+                #     print("❌ 이어붙이기 실패:")
+                #     print("   ➤ 에러 타입:", type(e))
+                #     print("   ➤ 에러 이름:", e.__class__.__name__)
+                #     print("   ➤ 에러 메시지:", str(e))
+
+
             result = {
                 "amrId"  : amr_id,
                 "missionId": f"MISSION{int(dest):03}",
-                "missionType" : type,
+                "missionType" : mission_type,
                 "route"  : path,
                 "expectedArrival" : int(cost)
             }
             all_results.append(result)
+            if amr_id==f"AMR{testNumber:03}":
+                print("결과",result)
+                print()
 
-        print("📦 전체 미션 결과:")
-        for r in all_results:
-            print(r)
+        #print("📦 전체 미션 결과:")
+        # for r in all_results:
+        #     print(r)
 
         if all_results:
             payload = {
@@ -175,11 +235,11 @@ def listen_loop():
             }
             producer.produce("algorithm-result", json.dumps(payload))
             producer.flush()
-            print(f"📤 Kafka 전송 완료 (trigger: {triggered_amr})")
+            #print(f"📤 Kafka 전송 완료 (trigger: {triggered_amr})")
 
 
 
-testNumber=9
+testNumber=15
 if __name__ == "__main__":
     #api.mapInit()
     listen_loop()

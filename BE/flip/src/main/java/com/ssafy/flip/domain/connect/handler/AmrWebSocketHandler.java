@@ -222,6 +222,27 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     .toList();
 
             statusService.saveAmr(amrDto, routeListJson);
+
+            // 2) 이전 노드 해제 → 대기열 있는 AMR에 퍼밋 전송
+            Integer currNode = nodeId;
+
+            if (amrId.equals(nodeOccupants.get(currNode))) {
+                // 1) 해당 노드 해제
+                nodeOccupants.remove(currNode);
+
+                // 2) 대기열에서 다음 AMR 꺼내 permit 전송
+                Queue<String> q = nodeQueues.get(currNode);
+                if (q != null && !q.isEmpty()) {
+                    String nextAmr = q.poll();
+                    nodeOccupants.put(currNode, nextAmr);
+
+                    int nextSub     = lastSubmissionMap.get(nextAmr);
+                    String nextMis  = lastMissionMap.get(nextAmr);
+                    WebSocketSession nextSession = amrSessions.get(nextAmr);
+
+                    sendTrafficPermit(nextAmr, nextMis, nextSub, currNode, nextSession);
+                }
+            }
             // — IDLE 전환 시 “미션 완료” 처리 —
             List<RouteTempDTO> temps = routeTempMap.get(amrId);
             if (state == 1 && temps != null && !temps.isEmpty()) {
@@ -233,19 +254,19 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 2) 지연 맵에 쌓인 미션이 있으면 우선 실행
                 MissionResponse delayed = algorithmResultConsumer.getDelayedMissionMap().get(amrId);
                 if (delayed != null) {
-                    log.info("🏁 저장된 후속 미션 맵에서 들고오기 : {}", amrId);
+                    //log.info("🏁 2번째 미션 시작 : {}", amrId);
                     //REdis에 미션 시간을 저장하자
-                    if ((11<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=20) ||(31<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=40)){
-                        lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
+                    if ((11<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=20) ||(31<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=40)){
+                        lineService.disableMissionAssignment(String.valueOf(delayed.getRoute().getFirst()));
                     }
-                    else if ((21<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=30) ||(41<=delayed.getRoute().getLast() && delayed.getRoute().getLast()<=50)){
-                        lineService.updateMissionAssignment(String.valueOf(delayed.getRoute().getLast()));
+                    else if ((21<=delayed.getRoute().getFirst() && delayed.getRoute().getFirst()<=30) ||(41<=delayed.getRoute().getLast() && delayed.getRoute().getFirst()<=50)){
+                        lineService.updateMissionAssignment(String.valueOf(delayed.getRoute().getFirst()));
                     }
 
                     algorithmResultConsumer.processMission(delayed);
                     
                     algorithmResultConsumer.getDelayedMissionMap().remove(amrId);
-                    log.info("🚀 지연 미션 실행 완료: {}", amrId);
+                    //log.info("🚀 2번째 미션 실행 완료: {}", amrId);
 
                     algorithmResultConsumer.sendWebTrigger();
                 }
@@ -256,8 +277,9 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
                     // missionType을 UNLOADING으로 덮어쓰기
                     String amrKey = "AMR_STATUS:" + amrDto.body().amrId();
+                    log.info("loading 값은 {}",amrDto.body().loading());
                     stringRedisTemplate.opsForHash().put(amrKey, "missionType", "LOADING");
-                    stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "");
+                    stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "[]");
 
                     trigger.run(payload);
 
@@ -281,26 +303,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
 
 
-            // 2) 이전 노드 해제 → 대기열 있는 AMR에 퍼밋 전송
-            Integer currNode = nodeId;
 
-            if (amrId.equals(nodeOccupants.get(currNode))) {
-                // 1) 해당 노드 해제
-                nodeOccupants.remove(currNode);
-
-                // 2) 대기열에서 다음 AMR 꺼내 permit 전송
-                Queue<String> q = nodeQueues.get(currNode);
-                if (q != null && !q.isEmpty()) {
-                    String nextAmr = q.poll();
-                    nodeOccupants.put(currNode, nextAmr);
-
-                    int nextSub     = lastSubmissionMap.get(nextAmr);
-                    String nextMis  = lastMissionMap.get(nextAmr);
-                    WebSocketSession nextSession = amrSessions.get(nextAmr);
-
-                    sendTrafficPermit(nextAmr, nextMis, nextSub, currNode, nextSession);
-                }
-            }
         } catch (Exception ex) {
             log.error("AMR_STATE 처리 실패", ex);
         }
