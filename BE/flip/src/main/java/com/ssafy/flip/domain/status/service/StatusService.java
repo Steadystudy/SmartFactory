@@ -16,6 +16,7 @@ public interface StatusService {
 
     void updateRouteList(String amrId, List<String> submissionList);
 
-    void saveLine(LineSaveRequestDTO requestDTO);
+    void saveLine(Integer lineId);
 
+    void brokeLine();
 }
