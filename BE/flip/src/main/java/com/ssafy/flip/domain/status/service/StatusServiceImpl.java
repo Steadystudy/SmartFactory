@@ -3,9 +3,6 @@ package com.ssafy.flip.domain.status.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.amr.service.AmrService;
-import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
-import com.ssafy.flip.domain.line.entity.Line;
-import com.ssafy.flip.domain.line.service.LineService;
 import com.ssafy.flip.domain.status.dto.request.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,10 +22,6 @@ public class StatusServiceImpl implements StatusService{
     private final ObjectMapper objectMapper;
 
     private final AmrService amrService;
-
-    private final LineService lineService;
-
-    private final AlgorithmTriggerProducer algorithmTriggerProducer;
 
     @Override
     public void saveAmr(AmrSaveRequestDTO amrDto, List<String> routeList) {
@@ -83,29 +76,14 @@ public class StatusServiceImpl implements StatusService{
     }
 
     @Override
-    public void saveLine(Integer lineId) {
-        String key = "LINE_STATUS:" + String.format("LINE%03d", lineId);
-
-        Line line = lineService.getLine(lineId.longValue());
+    public void saveLine(LineSaveRequestDTO requestDTO) {
+        String key = "LINE_STATUS:" + requestDTO.lineId();
 
         Map<String, String> map = new HashMap<>();
-        map.put("cycleTime", String.valueOf(line.getCycleTime()));
-        map.put("status", String.valueOf(line.isStatus()));
+        map.put("cycleTime", String.valueOf(requestDTO.cycleTime()));
+        map.put("status", String.valueOf(requestDTO.status()));
         map.put("lastInputTime", String.valueOf(LocalDateTime.now()));
 
-        stringRedisTemplate.opsForHash().putAll(key, map);
-    }
-
-    @Override
-    public void brokeLine() {
-        lineService.brokeLine(10L);
-        String kafkaPayload = "LINE BROKEN : "+0;
-        algorithmTriggerProducer.run(kafkaPayload);
-
-        String key = "LINE_STATUS:" + String.format("LINE%03d", 10);
-
-        Map<String, String> map = new HashMap<>();
-        map.put("status", String.valueOf(false));
         stringRedisTemplate.opsForHash().putAll(key, map);
     }
 }

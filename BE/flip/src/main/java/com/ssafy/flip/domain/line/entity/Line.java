@@ -21,12 +21,4 @@ public class Line {
 
     @Column(nullable = false)
     private boolean status;
-
-    public void brokeLine() {
-        this.status = false;
-    }
-
-    public void repairLine() {
-        this.status = true;
-    }
 }

@@ -5,7 +5,6 @@ from datetime import datetime, timezone, timedelta
 import random
 import api   # 같은 디렉터리의 api.py 임포트
 from dotenv import load_dotenv
-import re
 
 # .env 파일 로드
 load_dotenv()
@@ -14,7 +13,7 @@ KAFKA_BOOT = os.getenv("KAFKA_BOOT", "localhost:9092")
 # -------------------- ① Redis → Python --------------------
 import json
 
-def fetch_robot_list(line_broken) -> list[tuple[str, int, int]]:
+def fetch_robot_list() -> list[tuple[str, int, int]]:
     robot_list = []
     ban_work_list = []
     for i in range(1, 21):
@@ -53,16 +52,12 @@ def fetch_robot_list(line_broken) -> list[tuple[str, int, int]]:
         else:
             ban_work_list.append(node_id)
 
-        if line_broken :
-            ban_work_list.append(30)
-
-
     return robot_list,ban_work_list
 
 
 
 
-def fetch_line_status(banlist, line_broken) -> list[tuple[int, float]]:
+def fetch_line_status(banlist) -> list[tuple[int, float]]:
     """
     Redis 키 MISSION_PT:11~50 에 저장된 ISO8601 문자열 → 현재시각과의 차이를 점수로 사용
     """
@@ -85,9 +80,6 @@ def fetch_line_status(banlist, line_broken) -> list[tuple[int, float]]:
                 elapsed = (now - ts).total_seconds()
                 if 11 <= node <= 20 or 31 <= node <= 40:
                     elapsed += api.loadingTimeTable[(node - 1) % 10 + 1][node]
-                if line_broken:
-                    if node == 20:
-                        continue
                 line_status.append((node, elapsed))
             except Exception as e:
                 print(f"⚠️ {key} 값 변환 실패: {ts_str} ({e})")
@@ -122,7 +114,6 @@ def print_assignment(consumer, partitions):
 def listen_loop():
     consumer.subscribe(["algorithm-trigger"], on_assign=print_assignment)
     while True:
-        line_broken = False
         msg = consumer.poll(1.0)
         if msg is None or msg.error():
             continue
@@ -136,10 +127,6 @@ def listen_loop():
                 print("🚀 [Simulator Start] 알고리즘 강제 실행")
                 triggered_amr = None  # 트리거 AMR 없음
                 # ↓ 아래에서 알고리즘 실행하게 그대로 내려감
-            elif "line broken" in raw_value.strip().lower():
-                print("🚀 [Simulator Start] 라인 박살살")
-                triggered_amr = None
-                line_broken = True
             else:
                 print(f"⚠️ 비정형 메시지 수신 (무시됨): {raw_value}")
                 continue
@@ -165,8 +152,8 @@ def listen_loop():
                     continue
 
         # ✅ 알고리즘 실행 부분 공통
-        robot,banlist   = fetch_robot_list(line_broken)
-        jobs    = fetch_line_status(banlist, line_broken)
+        robot,banlist   = fetch_robot_list()
+        jobs    = fetch_line_status(banlist)
         assign  = api.assign_tasks(robot, jobs)
 
         all_results = []
