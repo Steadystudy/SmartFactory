@@ -34,7 +34,7 @@ export const VisualizationPanel = () => {
   }, [amrSocket, isConnected]);
 
   return (
-    <div className='flex-shrink-0 w-[calc(75%-80px)] p-4 h-dvh'>
+    <div className='w-3/4 p-4 h-dvh'>
       <div className='h-full'>
         <Tabs defaultValue='3d' className='w-full h-full'>
           <TabsList className='grid w-full grid-cols-2 cursor-pointer bg-white/10'>
