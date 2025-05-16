@@ -68,11 +68,4 @@ public class StatusController {
     public ResponseEntity<HeatMapResponseDTO> getHeatMapStatus(){
         return ResponseEntity.ok(statusService.getHeatMapStatus());
     }
-
-    @Operation(summary = "라인 고장", description = "라인 고장 처리")
-    @GetMapping("/line/broken")
-    public ResponseEntity<String> brokeLine(){
-        statusService.brokeLine();
-        return ResponseEntity.ok(null);
-    }
 }

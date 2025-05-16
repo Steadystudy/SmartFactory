@@ -28,10 +28,4 @@ public class StatusController {
         return ResponseEntity.ok(null);
         //return ResponseEntity.ok(new AmrMissionResponseDTO("AMR001", 0, 1, "MOVING", 2, "ERROR01", LocalDateTime.now(), "TYPE001", (float) 3.14, (float) 3.14, (float) 71.5, (float) 65.5, 620));
     }
-
-    @GetMapping("/line/broken")
-    public ResponseEntity<String> brokeLine(){
-        statusService.brokeLine();
-        return ResponseEntity.ok(null);
-    }
 }

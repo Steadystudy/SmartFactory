@@ -43,8 +43,6 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
     private final WebClient webClient;
 
-    private int brokenLineAmount = 100;
-
     @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
         List<AmrStatusRedis> amrStatusIterable = amrStatusRedisManualRepository.findAllAmrStatus();
@@ -107,6 +105,19 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
         messagingTemplate.convertAndSend("/amr/line", responseDTO);
     }
 
+//    @Override
+//    @Scheduled(fixedRate = 1000)
+//    public void getRouteStatus() {
+//        for(int i = 1; i <= 20; i++) {
+//            String amrId = String.format("AMR%03d", i);
+//            AmrStatusRedis amrStatusRedis = amrStatusRedisManualRepository.findByAmrId(amrId)
+//                    .orElseThrow();
+//
+//            MissionStatusResponseDTO responseDTO = MissionStatusResponseDTO.from(amrStatusRedis);
+//            messagingTemplate.convertAndSend("/amr/route" + amrId, responseDTO);
+//        }
+//    }
+
     private ThreadPoolTaskScheduler initScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(10); // 동시 AMR 수
@@ -122,7 +133,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                 MissionStatusResponseDTO dto = MissionStatusResponseDTO.from(status);
                 messagingTemplate.convertAndSend("/amr/route/" + amrId, dto);
             });
-        }, 200); // 0.5초 간격
+        }, 500); // 0.5초 간격
 
         scheduledTasks.put(amrId, future);
     }
@@ -183,15 +194,6 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                 amount = (int) Math.min(maxAmount, Math.floor((1 - ratio) * maxAmount));
             }
             if(amount < 0) amount = 0;
-
-            if(lineStatusRedis.getLineId() == 10)
-                if(lineStatusRedis.getStatus()) {
-                    amount = brokenLineAmount;
-                    brokenLineAmount--;
-                    if(brokenLineAmount == 0){
-                        brokenLineAmount = 100;
-                    }
-                }
 
             amountMap.put(lineStatusRedis, amount);
         }

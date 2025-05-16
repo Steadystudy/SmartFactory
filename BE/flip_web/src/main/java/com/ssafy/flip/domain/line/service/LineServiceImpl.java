@@ -31,13 +31,4 @@ public class LineServiceImpl implements LineService {
                 .orElseThrow();
     }
 
-    @Override
-    public void brokeLine(Long id) {
-        Line line = lineRepository.findById(id)
-                .orElseThrow();
-
-        line.brokeLine();
-
-    }
-
 }

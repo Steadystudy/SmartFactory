@@ -19,5 +19,4 @@ public interface LineService {
 
     void updateMissionAssignment(String missionId);
 
-    void brokeLine(Long id);
 }
