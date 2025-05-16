@@ -70,6 +70,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
     private final LineService lineService;
     private final StringRedisTemplate stringRedisTemplate;
 
+
     @PostConstruct
     public void initObjectMapper() {
         objectMapper.registerModule(new JavaTimeModule());
@@ -281,6 +282,59 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     log.info("loading 값은 {}",amrDto.body().loading());
                     stringRedisTemplate.opsForHash().put(amrKey, "missionType", "LOADING");
                     stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "[]");
+                    //미션 취소 뿌리기
+                    for (int i = 1; i <= 20; i++) {
+                        String amrCancelId = String.format("AMR%03d", i);
+                        String amrCancelKey = "AMR_STATUS:" + amrCancelId;
+
+                        Map<Object, Object> map = stringRedisTemplate.opsForHash().entries(amrCancelKey);
+
+                        Object loadingObj = map.get("loading");
+                        if (loadingObj != null && "false".equalsIgnoreCase(loadingObj.toString())) {
+
+                            // submissionId 가져오기
+                            int submissionId = 0;
+                            try {
+                                submissionId = Integer.parseInt(map.getOrDefault("submissionId", "0").toString());
+                            } catch (Exception e) {
+                                continue; // 잘못된 형식이면 skip
+                            }
+
+                            // submissionList 가져오기
+                            Object listRaw = map.get("submissionList");
+                            if (listRaw == null) continue;
+
+                            List<Map<String, Object>> parsedList = new ArrayList<>();
+                            try {
+                                List<String> rawList = new ObjectMapper().readValue(listRaw.toString(), List.class);
+                                for (String item : rawList) {
+                                    parsedList.add(new ObjectMapper().readValue(item, Map.class));
+                                }
+                            } catch (Exception e) {
+                                continue; // JSON 파싱 실패 시 skip
+                            }
+
+                            int listSize = parsedList.size();
+
+                            boolean shouldCancel = false;
+
+                            if (submissionId == listSize) {
+                                // 마지막 submission이면 취소
+                                shouldCancel = true;
+                            } else if (submissionId > 0 && submissionId <= listSize) {
+                                // submissionId는 1부터 시작한다고 가정
+                                int node = Integer.parseInt(parsedList.get(submissionId - 1).get("submissionNode").toString());
+                                if ((1 <= node && node <= 10) || (21 <= node && node <= 30) || (41 <= node && node <= 50)) {
+                                    shouldCancel = true;
+                                }
+                            }
+
+                            if (shouldCancel) {
+                                algorithmResultConsumer.sendCancelMission(amrCancelId);
+                            }
+                        }
+                    }
+
 
                     trigger.run(payload);
 
