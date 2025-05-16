@@ -16,6 +16,7 @@ import json
 def fetch_robot_list() -> list[tuple[str, int, int]]:
     robot_list = []
     ban_work_list = []
+        
     for i in range(1, 21):
         key = f"AMR_STATUS:AMR{i:03}"
         if not r.exists(key):
@@ -55,7 +56,15 @@ def fetch_robot_list() -> list[tuple[str, int, int]]:
     return robot_list,ban_work_list
 
 
-
+def find_charge_amr():
+    for i in range(1, 21):
+        key = f"AMR_STATUS:AMR{i:03}"
+        if not r.exists(key):
+            continue
+        
+        h = r.hgetall(key)
+        battery = h.get("battery")
+        
 
 def fetch_line_status(banlist) -> list[tuple[int, float]]:
     """

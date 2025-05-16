@@ -72,7 +72,7 @@ def mapInit():
         x1, y1 = nodes[node1]['x'], nodes[node1]['y']
         x2, y2 = nodes[node2]['x'], nodes[node2]['y']
         distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-        weight = distance
+        weight = distance / speed
 
         if direction == 'twoway':
             graph.setdefault(node1, []).append((node2, weight))
