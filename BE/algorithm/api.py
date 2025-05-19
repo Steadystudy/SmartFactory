@@ -31,9 +31,9 @@ conn = pymysql.connect(
 )
 
 
-def mapInit():
+def mapInit(banEdge=0):
     global nodes, edges, graph, missions
-
+    graph={}
     with conn.cursor() as cursor:
         # ① Node 정보
         cursor.execute("SELECT node_id, x, y FROM node")
@@ -46,7 +46,7 @@ def mapInit():
 
         # ② Edge 정보
         cursor.execute("""
-            SELECT edge_direction, speed, node1_node_id AS node1, node2_node_id AS node2
+            SELECT edge_id,edge_direction, speed, node1_node_id AS node1, node2_node_id AS node2
             FROM edge
         """)
         edge_rows = cursor.fetchall()
@@ -64,6 +64,8 @@ def mapInit():
 
     # ④ 그래프 생성
     for edge in edges:
+        if edge['edge_id'] == banEdge:
+            continue
         node1 = edge['node1']
         node2 = edge['node2']
         direction = edge['edge_direction'].lower()
@@ -245,7 +247,7 @@ def assign_charging_spots(chargeStartNode, zones,amrs):
     assigned_zones = []
     results = []
 
-    for index,start in enumerate(chargeStartNode):
+    for index,(start,amrId) in enumerate(chargeStartNode):
         if 1<=start<=10 or 21<=start<=30 or 41<=start<=50:
             continue
         best_path = None
@@ -265,10 +267,20 @@ def assign_charging_spots(chargeStartNode, zones,amrs):
         if best_zone is not None:
             assigned_zones.append(best_zone)
             node_only_best_path = [node for node, _ in best_path]
-            results.append(((amrs[index], "dummy", "dummy"), (best_zone, "dummy"), missions[best_zone], node_only_best_path, best_time))
+            #amrID,목적지,미션내용,최적경로,소요시간간
+            results.append(((amrId, "dummy", "dummy"), (best_zone, "dummy"), missions[best_zone], node_only_best_path, best_time))
 
     return results
 
+def calEdgeCutRoute(startCancelStartEndNode,cancelled_amrs):
+    results = []
+    for i in range(len(startCancelStartEndNode)):
+        amrId=cancelled_amrs[i]
+        start=startCancelStartEndNode[i][0]
+        dest=startCancelStartEndNode[i][1]
+        path,cost=aStar(start,dest)
+        results.append(((amrId, "dummy", "dummy"), (dest, "dummy"), missions[dest], path, cost))
+    return results
 
 
 # --- 맨 아래의 “demo 코드” 삭제 -----------------------------

@@ -11,6 +11,41 @@ load_dotenv()
 KAFKA_HOST = os.getenv('KAFKA_HOST',"localhost")
 KAFKA_BOOT = os.getenv("KAFKA_BOOT", "localhost:9092")
 
+
+consumer = Consumer({
+    "bootstrap.servers": KAFKA_BOOT,
+    "group.id": "algorithm-grp",
+    "auto.offset.reset": "latest",         # 최신 메시지만
+    "enable.auto.commit": True             # ✅ 자동 커밋
+})
+
+producer = Producer({"bootstrap.servers": KAFKA_BOOT})
+
+r = redis.Redis(host=KAFKA_HOST, port=6379, decode_responses=True)
+
+def findStartCancelledAmrs(cancelled_amrs):
+    startCancelStartEndNode=[]
+    for amr_id in cancelled_amrs:
+        key = f"AMR_STATUS:{amr_id}"
+        h = r.hgetall(key)
+        if "submissionList" in h:
+            try:
+                submission_list = [json.loads(s) for s in json.loads(h["submissionList"])]
+                # submissionNode 목록만 추출
+                submission_nodes = [s.get("submissionNode") for s in submission_list]
+                # currentNode가 submissionList에 있다면, 그 다음 submissionNode 사용
+                if len(submission_nodes)!=0:
+                    node_id = submission_nodes[int(h.get("submissionId", 0))]
+                else:
+                    print("심각한 오류 : 엣지를 끊었는데 submissionNode를 찾을수 없는 경우")
+                    pass  # 그대로 current_node 유지
+                startCancelStartEndNode.append((node_id,submission_nodes[-1]))
+
+            except Exception as e:
+                pass
+    return startCancelStartEndNode
+
+
 def findAvailableChargingZones():
     """
     몇 번 충전구역이 사용 가능한지 구하는 함수
@@ -98,7 +133,7 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
         else:
             #banlist가 잘못들어가고 있음 =꿀발라 놓는 이유
             ban_work_list.append(node_id)
-            #ban_work_list.append(submission_nodes[-1])
+            ban_work_list.append(submission_nodes[-1])
 
     return robot_list,ban_work_list
         
@@ -131,23 +166,62 @@ def fetch_line_status(banlist) -> list[tuple[int, float]]:
                 print(f"⚠️ {key} 값 변환 실패: {ts_str} ({e})")
     return line_status
 
+def build_results_from_assign(assign):
+    all_results = []
+    
+    for (amr_id, _, _), (dest, _), mission_type, path, cost in assign:
+        if cost >= 900 or path is None:
+            print(cost, " 코스트 넘치거나", path, "경로가 없음")
+            continue
+
+        key = f"AMR_STATUS:{amr_id}"
+        h = r.hgetall(key)
+
+        if "submissionList" in h:
+            raw_value = h["submissionList"]
+            raw_list = json.loads(raw_value)
+
+            submission_list = []
+            for s in raw_list:
+                if isinstance(s, str):
+                    try:
+                        parsed = json.loads(s)
+                        submission_list.append(parsed)
+                    except Exception:
+                        continue
+                elif isinstance(s, dict):
+                    submission_list.append(s)
+                elif isinstance(s, int):
+                    submission_list.append({"submissionNode": s})
+
+            submission_nodes = [s.get("submissionNode") for s in submission_list if s.get("submissionNode") is not None]
+            if len(submission_list) != 0:
+                submission_nodes = submission_nodes[:int(h.get("submissionId", 0))]
+            print(f"이전 경로 :{submission_nodes} , ID:{int(h.get("submissionId", 0))} 알고리즘 경로 :{path}")
+            if len(submission_nodes) != 0 and submission_nodes[-1] == path[0]:
+                path = submission_nodes[:-1] + path
+            else:
+                path = submission_nodes + path
+            print(f"최종 경로 :{path} , ID:{int(h.get("submissionId", 0))}")
+
+        result = {
+            "amrId": amr_id,
+            "missionId": f"MISSION{int(dest):03}",
+            "missionType": mission_type,
+            "route": path,
+            "expectedArrival": int(cost)
+        }
+        all_results.append(result)
+        print("결과", result)
+    
+    return all_results
+
 
 # -------------------- ② 알고리즘 실행 --------------------
 
-
-consumer = Consumer({
-    "bootstrap.servers": KAFKA_BOOT,
-    "group.id": "algorithm-grp",
-    "auto.offset.reset": "latest",         # 최신 메시지만
-    "enable.auto.commit": True             # ✅ 자동 커밋
-})
-
-producer = Producer({"bootstrap.servers": KAFKA_BOOT})
-
-r = redis.Redis(host=KAFKA_HOST, port=6379, decode_responses=True)
-
 def print_assignment(consumer, partitions):
     print("🟢 카프카 연결 완료")
+
 
 
 
@@ -166,7 +240,32 @@ def listen_loop():
             triggered_amr = None
             cancelled_amrs = []
             inputMissionType = "START"
-        
+        elif raw_value.lower() == "edge cut":
+            cutEdge = int(payload.get("cutEdge"))
+            cancelled_amrs = payload.get("cancelledAmrs", [])
+            api.mapInit(cutEdge)
+            if len(cancelled_amrs)!=0:
+                continue
+            """
+            1. cancelled_amrs를 시작위치를 들고온다.
+            2. (시작위치와,AMRID)를 api서버로 보내준다음 ASTAR알고리즘을 돌린다.
+            """
+            startCancelStartEndNode=findStartCancelledAmrs(cancelled_amrs)
+            assign=api.calEdgeCutRoute(startCancelStartEndNode,cancelled_amrs)
+            all_results = build_results_from_assign(assign)
+            
+            print("")
+            if all_results:
+                payload = {
+                    "triggeredAmr": triggered_amr,  # None 일 수도 있음
+                    "missions": all_results
+                }
+                producer.produce("algorithm-result", json.dumps(payload))
+                producer.flush()
+                #print(f"📤 Kafka 전송 완료 (trigger: {triggered_amr})")
+            continue
+
+
         # ✅ 케이스 2: JSON payload
         elif raw_value.startswith("{"):
             try:
@@ -178,7 +277,7 @@ def listen_loop():
             triggered_amr = payload.get("amrId")
             cancelled_amrs = payload.get("cancelledAmrs", [])
             inputMissionType = payload.get("missionType")
-            print("미션 완료 {} 미션 타입 {}",triggered_amr,inputMissionType)
+            print(f"미션 완료 : {triggered_amr} 미션 타입 : {inputMissionType}")
 
             if not triggered_amr:
                 print("⚠️ triggered_amr 없음 → 알고리즘 실행 생략")
@@ -194,9 +293,9 @@ def listen_loop():
         # ✅ 알고리즘 실행 부분 공통
 
         zones, amrs = get_charging_assignments() # zones : 충전 가능한 구역,amrs : 현재 충전 해야하는 amr 기기 번호
-        print("충전 구역 {} 충전 해야하는 기기들 {}",zones,amrs)
+        print(f"충전 구역 : {zones} 충전 해야하는 기기들 : {amrs}")
         robot,banlist   = fetch_robot_list(amrs,triggered_amr,inputMissionType)
-        print("일 할 로봇 {} 금지구역 {}",robot,banlist)
+        print(f"일 할 로봇 : {robot} 금지구역 : {banlist}")
         jobs    = fetch_line_status(banlist)
         assign  = api.assign_tasks(robot, jobs)
         """ 충전 친구들도 넣어야함 """
@@ -232,84 +331,12 @@ def listen_loop():
 
                 except Exception as e:
                     pass
-            chargeStartNode.append(node_id)
+            chargeStartNode.append((node_id,amr_id))
 
         chargeResult = api.assign_charging_spots(chargeStartNode, zones,amrs)
         
-
-
-        all_results = []
         assign.extend(chargeResult)
-        for (amr_id, _, _), (dest, _), mission_type, path, cost in assign:
-            if cost >= 900 or path is None:
-                print(cost," 코스트 넘치거나",path,"경로가 없음")
-                continue
-
-            # firstNode=path[0]
-            # if 1<=firstNode<=10 or 21<=firstNode<=30 or 41<=firstNode<=50:
-            #     key = f"AMR_STATUS:{amr_id}"
-            #     h = r.hgetall(key)
-            #     current_node = int(h.get("currentNode", 0))
-            #     path.insert(0, current_node)
-
-            key = f"AMR_STATUS:{amr_id}"
-            h = r.hgetall(key)
-            
-            if "submissionList" in h:
-                # try:
-                    raw_value = h["submissionList"]
-                    raw_list = json.loads(raw_value)
-
-                    submission_list = []
-                    for s in raw_list:
-                        if isinstance(s, str):
-                            try:
-                                parsed = json.loads(s)
-                                submission_list.append(parsed)
-                            except Exception:
-                                continue
-                        elif isinstance(s, dict):
-                            submission_list.append(s)
-                        elif isinstance(s, int):
-                            submission_list.append({"submissionNode": s})
-
-                    submission_nodes = [s.get("submissionNode") for s in submission_list if s.get("submissionNode") is not None]
-                    #print(amr_id)
-                    if int(h.get("submissionId"))==0:
-                        pass
-                        #print(f"현재 노드,다음 목적지 노드 , 서브 미션 노드 , 서브미션ID",int(h.get("currentNode", 0)),int(h.get("currentNode", 0)),submission_nodes,int(h.get("submissionId", 0)))
-                    else:
-                        pass
-                        #print(f"현재 노드,다음 목적지 노드 , 서브 미션 노드 , 서브미션ID",int(h.get("currentNode", 0)),submission_nodes[int(h.get("submissionId", 0))],submission_nodes,int(h.get("submissionId", 0)))
-                    if len(submission_list)!=0:
-                        submission_nodes = submission_nodes[:int(h.get("submissionId", 0))]
-                    #if amr_id==f"AMR{testNumber:03}":
-                    # print("이전 서브리스트",submission_nodes)
-                    # print("알고리즘 서버 정답 :",path)
-                    if len(submission_nodes)!=0 and submission_nodes[-1] == path[0]:
-                        path=submission_nodes[:-1]+path
-                    else:
-                        path=submission_nodes+path
-                    #if amr_id==f"AMR{testNumber:03}":
-                    # print("최종 루트",path)
-
-                # except Exception as e:
-                #     print("❌ 이어붙이기 실패:")
-                #     print("   ➤ 에러 타입:", type(e))
-                #     print("   ➤ 에러 이름:", e.__class__.__name__)
-                #     print("   ➤ 에러 메시지:", str(e))
-
-
-            result = {
-                "amrId"  : amr_id,
-                "missionId": f"MISSION{int(dest):03}",
-                "missionType" : mission_type,
-                "route"  : path,
-                "expectedArrival" : int(cost)
-            }
-            all_results.append(result)
-            print("결과",result)
-
+        all_results = build_results_from_assign(assign)
         
         print("")
         if all_results:
