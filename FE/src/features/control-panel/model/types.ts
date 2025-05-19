@@ -17,6 +17,7 @@ export type AMR_CARD_STATUS = Pick<
   | 'expectedArrival'
   | 'startedAt'
   | 'battery'
+  | 'realArrival'
 >;
 
 export type FACILITY_CARD_STATUS = {

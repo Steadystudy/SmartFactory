@@ -4,17 +4,14 @@ import { Canvas } from '@react-three/fiber';
 import { MapControls } from '@react-three/drei';
 import { Suspense, useEffect, useRef } from 'react';
 import { Map3D, MapLoading } from '@/entities/map';
-import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { Model3DRenderer } from '@/entities/amrModel';
 import { useCameraFollow } from '../lib';
-import { MapPointer } from '@/entities/3dPointer';
-import { RoutePath } from './RoutePath';
 import * as THREE from 'three';
 import { PersonModel } from '@/entities/personModel';
 import { usePersonModelStore } from '@/shared/store/person-model-store';
+import SelectedAMRMarkers from './SelectedAMRMarkers';
 
 const Warehouse = () => {
-  const { selectedAmrId, startX, startY, targetX, targetY } = useSelectedAMRStore();
   const { isRepairing } = usePersonModelStore();
   const { controlsRef } = useCameraFollow();
   const lastValidTarget = useRef<THREE.Vector3>(new THREE.Vector3(40, 0, 40));
@@ -77,18 +74,7 @@ const Warehouse = () => {
       {/* 모델 렌더링 */}
       <Model3DRenderer />
 
-      {/* 출발지 표시 (파란색 구체) */}
-      {selectedAmrId && startX && startY && (
-        <MapPointer position={[startX, 3, startY]} color='Blue' />
-      )}
-
-      {/* 도착지 표시 (빨간색 구체) */}
-      {selectedAmrId && targetX && targetY && (
-        <MapPointer position={[targetX, 3, targetY]} color='Red' />
-      )}
-
-      {/* Route 경로 시각화 */}
-      {selectedAmrId && <RoutePath />}
+      <SelectedAMRMarkers />
 
       {/* 정비 상태일 때만 PersonModel 렌더링 */}
       {isRepairing && <PersonModel />}
@@ -96,7 +82,7 @@ const Warehouse = () => {
       <MapControls
         ref={controlsRef}
         enableZoom={true}
-        minDistance={20}
+        minDistance={10}
         maxDistance={80}
         autoRotate={false}
         maxPolarAngle={Math.PI / 4}

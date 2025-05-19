@@ -5,96 +5,61 @@ import { BadgeAlert, BoltIcon } from 'lucide-react';
 import { AMR_CARD_STATUS } from '../model';
 import { AMRState } from '@/entities/amrModel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
 import { BatteryIcon } from './BatteryIcon';
+
 interface MissionCardProps {
   data: AMR_CARD_STATUS;
+  isSelected: boolean;
+  onClick: () => void;
 }
 
-export const MissionCard = ({ data }: MissionCardProps) => {
-  const { selectedAmrId, setSelectedAmrId, setTargetPosition, setStartPosition } =
-    useSelectedAMRStore();
-  const [elapsedTime, setElapsedTime] = useState<number>(0);
+const formatTime = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return minutes > 0
+    ? `${minutes}분 ${remainingSeconds.toString().padStart(2, '0')}초`
+    : `${remainingSeconds.toString().padStart(2, '0')}초`;
+};
 
-  useEffect(() => {
-    const calculateElapsedTime = () => {
-      const startTime = new Date(data.startedAt).getTime();
-      const currentTime = new Date().getTime();
-      return Math.floor((currentTime - startTime) / 1000); // 초 단위
-    };
-    setElapsedTime(calculateElapsedTime());
-    const timer = setInterval(() => {
-      setElapsedTime(calculateElapsedTime());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [data.startedAt]);
+const getStateColor = (state: AMRState) => {
+  switch (state) {
+    case AMRState.ERROR:
+      return 'text-red-500';
+    case AMRState.IDLE:
+      return 'text-gray-500';
+    case AMRState.PROCESSING:
+      return 'text-green-500';
+    case AMRState.CHARGING:
+      return 'text-yellow-500';
+    default:
+      return 'text-gray-500';
+  }
+};
 
-  const handleCardClick = () => {
-    if (selectedAmrId === data.amrId) {
-      setSelectedAmrId(null);
-      setTargetPosition(0, 0);
-      setStartPosition(0, 0);
-    } else {
-      setSelectedAmrId(data.amrId);
-      setTargetPosition(data.targetX, data.targetY);
-      setStartPosition(data.startX, data.startY);
-    }
-  };
+const getStateText = (state: AMRState) => {
+  switch (state) {
+    case AMRState.ERROR:
+      return '오류 상태';
+    case AMRState.IDLE:
+      return '대기 상태';
+    case AMRState.PROCESSING:
+      return '작업 중';
+    case AMRState.CHARGING:
+      return '충전 중';
+    default:
+      return '알 수 없음';
+  }
+};
 
-  useEffect(() => {
-    if (selectedAmrId === data.amrId) {
-      setStartPosition(data.startX, data.startY);
-      setTargetPosition(data.targetX, data.targetY);
-    }
-  }, [data, selectedAmrId, setStartPosition, setTargetPosition]);
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return minutes > 0
-      ? `${minutes}분 ${remainingSeconds.toString().padStart(2, '0')}초`
-      : `${remainingSeconds.toString().padStart(2, '0')}초`;
-  };
-
-  const getStateColor = (state: AMRState) => {
-    switch (state) {
-      case AMRState.ERROR:
-        return 'text-red-500';
-      case AMRState.IDLE:
-        return 'text-gray-500';
-      case AMRState.PROCESSING:
-        return 'text-green-500';
-      case AMRState.CHARGING:
-        return 'text-yellow-500';
-      default:
-        return 'text-gray-500';
-    }
-  };
-
-  const getStateText = (state: AMRState) => {
-    switch (state) {
-      case AMRState.ERROR:
-        return '오류 상태';
-      case AMRState.IDLE:
-        return '대기 상태';
-      case AMRState.PROCESSING:
-        return '작업 중';
-      case AMRState.CHARGING:
-        return '충전 중';
-      default:
-        return '알 수 없음';
-    }
-  };
-
+export const MissionCard = ({ data, isSelected, onClick }: MissionCardProps) => {
   return (
     <Card
       className={cn(
         'bg-white/10 w-full p-4 mb-4 cursor-pointer transition-colors rounded-lg',
-        selectedAmrId === data.amrId && 'outline-2 outline-blue-500 ',
+        isSelected && 'outline-2 outline-blue-500 ',
       )}
-      onClick={handleCardClick}
+      onClick={onClick}
     >
       <div className='flex items-center justify-between mb-4'>
         <div className='flex items-center gap-2'>
@@ -120,7 +85,7 @@ export const MissionCard = ({ data }: MissionCardProps) => {
         </div>
         <div className='flex justify-between'>
           <span className='text-sm text-white '>실제 수행 시간</span>
-          <span className='text-sm'>{formatTime(elapsedTime)}</span>
+          <span className='text-sm'>{formatTime(data.realArrival ?? 0)}</span>
         </div>
       </div>
 

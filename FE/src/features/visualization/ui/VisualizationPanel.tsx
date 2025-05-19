@@ -12,6 +12,7 @@ import { useLineStore } from '@/shared/store/lineStore';
 
 export const VisualizationPanel = () => {
   const { updateModels } = useModelStore();
+  const { setLines } = useLineStore();
   const { amrSocket, isConnected } = useAmrSocketStore();
 
   useEffect(() => {
@@ -21,17 +22,12 @@ export const VisualizationPanel = () => {
       const data = JSON.parse(message.body).amrRealTimeList;
       updateModels(data.map((d: AMR_CURRENT_STATE) => ({ ...d, dir: degreeToRadian(d.dir) })));
     });
-  }, [isConnected, amrSocket, updateModels]);
 
-  const { setLines } = useLineStore();
-
-  useEffect(() => {
-    if (!isConnected || !amrSocket) return;
     amrSocket.subscribe('/amr/line', (message) => {
       const data = JSON.parse(message.body);
       setLines(data.lineList);
     });
-  }, [amrSocket, isConnected]);
+  }, [isConnected, amrSocket, updateModels, setLines]);
 
   return (
     <div className='w-3/4 p-4 h-dvh'>

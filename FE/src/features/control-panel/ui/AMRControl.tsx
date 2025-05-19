@@ -7,27 +7,52 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useReducer, useMemo } from 'react';
 import { AMR_CARD_STATUS } from '../model';
 import { useAmrSocketStore } from '@/shared/store/amrSocket';
 import { MissionCard } from './MissionCard';
+import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 
 const FILTER_ALL = 'ALL';
 
+const initialFilter = {
+  mission: FILTER_ALL,
+  amr: FILTER_ALL,
+  state: FILTER_ALL,
+};
+
+type FilterState = typeof initialFilter;
+type FilterAction = { type: string; value: string };
+
+function filterReducer(state: FilterState, action: FilterAction): FilterState {
+  switch (action.type) {
+    case 'SET_MISSION':
+      return { ...state, mission: action.value };
+    case 'SET_AMR':
+      return { ...state, amr: action.value };
+    case 'SET_STATE':
+      return { ...state, state: action.value };
+    default:
+      return state;
+  }
+}
+
 export default function AMRControl() {
-  const [missionFilter, setMissionFilter] = useState<string>(FILTER_ALL);
-  const [amrFilter, setAmrFilter] = useState<string>(FILTER_ALL);
-  const [stateFilter, setStateFilter] = useState<string>(FILTER_ALL);
+  const [filter, dispatch] = useReducer(filterReducer, initialFilter);
   const [data, setData] = useState<AMR_CARD_STATUS[]>([]);
   const { amrSocket, isConnected } = useAmrSocketStore();
+  const { selectedAmrId, toggleSelectedAMR } = useSelectedAMRStore();
 
-  const filteredData = data.filter((amr) => {
-    const missionMatch = missionFilter === FILTER_ALL || amr.missionType === missionFilter;
-    const amrMatch = amrFilter === FILTER_ALL || amr.type === amrFilter;
-    const stateMatch = stateFilter === FILTER_ALL || amr.state === Number(stateFilter);
-
-    return missionMatch && amrMatch && stateMatch;
-  });
+  const filteredData = useMemo(
+    () =>
+      data.filter((amr) => {
+        if (filter.mission !== FILTER_ALL && amr.missionType !== filter.mission) return false;
+        if (filter.amr !== FILTER_ALL && amr.type !== filter.amr) return false;
+        if (filter.state !== FILTER_ALL && amr.state !== Number(filter.state)) return false;
+        return true;
+      }),
+    [data, filter],
+  );
 
   useEffect(() => {
     if (!isConnected || !amrSocket) return;
@@ -41,7 +66,10 @@ export default function AMRControl() {
   return (
     <div className='flex flex-col grow p-2 bg-[#0B1120] '>
       <div className='flex w-full gap-2 mb-2 overscroll-none'>
-        <Select onValueChange={setMissionFilter} defaultValue={FILTER_ALL}>
+        <Select
+          onValueChange={(value) => dispatch({ type: 'SET_MISSION', value })}
+          defaultValue={FILTER_ALL}
+        >
           <SelectTrigger className='w-full text-white'>
             <SelectValue placeholder='Mission' />
           </SelectTrigger>
@@ -54,7 +82,10 @@ export default function AMRControl() {
           </SelectContent>
         </Select>
 
-        <Select onValueChange={setAmrFilter} defaultValue={FILTER_ALL}>
+        <Select
+          onValueChange={(value) => dispatch({ type: 'SET_AMR', value })}
+          defaultValue={FILTER_ALL}
+        >
           <SelectTrigger className='w-full text-white'>
             <SelectValue placeholder='AMR' />
           </SelectTrigger>
@@ -68,7 +99,10 @@ export default function AMRControl() {
           </SelectContent>
         </Select>
 
-        <Select onValueChange={setStateFilter} defaultValue={FILTER_ALL}>
+        <Select
+          onValueChange={(value) => dispatch({ type: 'SET_STATE', value })}
+          defaultValue={FILTER_ALL}
+        >
           <SelectTrigger className='w-full text-white'>
             <SelectValue placeholder='State' />
           </SelectTrigger>
@@ -84,7 +118,12 @@ export default function AMRControl() {
 
       <div className='flex flex-col h-full p-1 mt-1 overflow-y-auto hide-scrollbar'>
         {filteredData.map((amr) => (
-          <MissionCard key={amr.amrId} data={amr} />
+          <MissionCard
+            key={amr.amrId}
+            data={amr}
+            isSelected={selectedAmrId === amr.amrId}
+            onClick={() => toggleSelectedAMR(amr)}
+          />
         ))}
       </div>
     </div>
