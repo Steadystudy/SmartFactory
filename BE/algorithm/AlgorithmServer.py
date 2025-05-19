@@ -210,10 +210,7 @@ def listen_loop():
                     #if amr_id==f"AMR{testNumber:03}":
                     print("이전 서브리스트",submission_nodes)
                     print("알고리즘 서버 정답 :",path)
-                    if len(submission_nodes)!=0 and submission_nodes[-1] == path[0]:
-                        path=submission_nodes[:-1]+path
-                    else:
-                        path=submission_nodes+path
+                    path=submission_nodes+path
                     #if amr_id==f"AMR{testNumber:03}":
                     print("최종 루트",path)
 

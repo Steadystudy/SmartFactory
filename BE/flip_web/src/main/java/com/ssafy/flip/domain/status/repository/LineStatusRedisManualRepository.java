@@ -22,8 +22,10 @@ public class LineStatusRedisManualRepository {
         return keys.stream()
                 .map(key -> {
                     Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
-                    String lineIdStr = key.replace("LINE_STATUS:", "");
-                    Long lineId = Long.parseLong(lineIdStr);
+                    String lineIdStr = key.replace("LINE_STATUS:", ""); // e.g., "LINE001"
+                    // "LINE001" -> "001" -> 1
+                    String numericPart = lineIdStr.replaceAll("\\D+", ""); // 정수만 추출
+                    Long lineId = Long.parseLong(numericPart);
                     return convertMapToLineStatusRedis(map, lineId);
                 })
                 .collect(Collectors.toList());
