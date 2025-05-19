@@ -275,12 +275,11 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                 // 3) 아니면 일반 상태 트리거
                 else {
                     lineService.markMissionBlockedNow(missionId);
-                    String payload = objectMapper.writeValueAsString(amrDto);
+                    List<String> cancelledAmrs = new ArrayList<>();
 
                     // missionType을 UNLOADING으로 덮어쓰기
                     String amrKey = "AMR_STATUS:" + amrDto.body().amrId();
-                    log.info("loading 값은 {}",amrDto.body().loading());
-                    stringRedisTemplate.opsForHash().put(amrKey, "missionType", "LOADING");
+                    //stringRedisTemplate.opsForHash().put(amrKey, "missionType", "LOADING");
                     stringRedisTemplate.opsForHash().put(amrKey, "submissionList", "[]");
                     //미션 취소 뿌리기
                     for (int i = 1; i <= 20; i++) {
@@ -292,15 +291,22 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                         Object loadingObj = map.get("loading");
                         if (loadingObj != null && "false".equalsIgnoreCase(loadingObj.toString())) {
 
-                            // submissionId 가져오기
+                            boolean shouldCancel = true;  // 기본은 취소
+
+                            // ✅ 예외 1: missionType == "CHARGING"
+                            String missionType = (map.getOrDefault("missionType", "")).toString();
+                            if ("CHARGING".equalsIgnoreCase(missionType)) {
+                                shouldCancel = false;
+                            }
+
+                            // ✅ 예외 2,3: submissionList 조건
                             int submissionId = 0;
                             try {
                                 submissionId = Integer.parseInt(map.getOrDefault("submissionId", "0").toString());
                             } catch (Exception e) {
-                                continue; // 잘못된 형식이면 skip
+                                // 파싱 실패 → 기본 shouldCancel 유지
                             }
 
-                            // submissionList 가져오기
                             Object listRaw = map.get("submissionList");
                             if (listRaw == null) continue;
 
@@ -311,32 +317,45 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                                     parsedList.add(new ObjectMapper().readValue(item, Map.class));
                                 }
                             } catch (Exception e) {
-                                continue; // JSON 파싱 실패 시 skip
+                                continue;
                             }
 
                             int listSize = parsedList.size();
 
-                            boolean shouldCancel = false;
-
+                            // 예외 2: 마지막 submission이면 취소하지 않음
                             if (submissionId == listSize) {
-                                // 마지막 submission이면 취소
-                                shouldCancel = true;
-                            } else if (submissionId > 0 && submissionId <= listSize) {
-                                // submissionId는 1부터 시작한다고 가정
-                                int node = Integer.parseInt(parsedList.get(submissionId - 1).get("submissionNode").toString());
-                                if ((1 <= node && node <= 10) || (21 <= node && node <= 30) || (41 <= node && node <= 50)) {
-                                    shouldCancel = true;
+                                shouldCancel = false;
+                            }
+
+                            // 예외 3: 특정 submissionNode 범위면 취소하지 않음
+                            else if (submissionId > 0 && submissionId <= listSize) {
+                                try {
+                                    int node = Integer.parseInt(parsedList.get(submissionId).get("submissionNode").toString());
+                                    if ((1 <= node && node <= 10) || (21 <= node && node <= 30) || (41 <= node && node <= 50)) {
+                                        shouldCancel = false;
+                                    }
+                                } catch (Exception e) {
+                                    // node 파싱 실패 시 무시
                                 }
                             }
 
+                            // ✅ 최종 취소
                             if (shouldCancel) {
                                 algorithmResultConsumer.sendCancelMission(amrCancelId);
+                                cancelledAmrs.add(amrCancelId);
                             }
                         }
                     }
 
 
+                    Map<String, Object> payloadMap = new HashMap<>();
+                    payloadMap.put("amrId", amrDto.body().amrId());
+                    payloadMap.put("cancelledAmrs", cancelledAmrs);
+                    payloadMap.put("missionType", amrDto.body().missionType());
+
+                    String payload = objectMapper.writeValueAsString(payloadMap);
                     trigger.run(payload);
+
 
                     if (missionToLine.containsKey(missionId)) {
                         statusService.saveLine(missionToLine.get(missionId));
