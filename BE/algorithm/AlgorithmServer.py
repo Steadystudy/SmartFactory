@@ -197,7 +197,7 @@ def build_results_from_assign(assign):
             submission_nodes = [s.get("submissionNode") for s in submission_list if s.get("submissionNode") is not None]
             if len(submission_list) != 0:
                 submission_nodes = submission_nodes[:int(h.get("submissionId", 0))]
-            print(f"이전 경로 :{submission_nodes} , ID:{int(h.get("submissionId", 0))} 알고리즘 경로 :{path}")
+            print(f'이전 경로 :{submission_nodes} , ID:{int(h.get("submissionId", 0))} 알고리즘 경로 :{path}')
             if len(submission_nodes) != 0 and submission_nodes[-1] == path[0]:
                 path = submission_nodes[:-1] + path
             else:
