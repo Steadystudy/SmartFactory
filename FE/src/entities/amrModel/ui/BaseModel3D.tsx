@@ -8,12 +8,12 @@ import { damp3, dampE } from 'maath/easing';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 
 const ANIMATION_SETTINGS = {
-  rotationDamping: 0.1,
-  positionDamping: 0.1,
+  rotationDamping: 0.25,
+  positionDamping: 0.25,
 };
 
 export const BaseModel3D = ({ scene, position, rotation, amrState }: Model3DProps) => {
-  const { selectedAmrId } = useSelectedAMRStore();
+  const selectedAmrId = useSelectedAMRStore((state) => state.selectedAmrId);
   const { amrId } = amrState;
 
   const modelRef = useRef<THREE.Group>(null);
