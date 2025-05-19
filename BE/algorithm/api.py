@@ -65,6 +65,7 @@ def mapInit(banEdge=0):
     # ④ 그래프 생성
     for edge in edges:
         if edge['edge_id'] == banEdge:
+            print(f"{banEdge} 삭제함")
             continue
         node1 = edge['node1']
         node2 = edge['node2']
