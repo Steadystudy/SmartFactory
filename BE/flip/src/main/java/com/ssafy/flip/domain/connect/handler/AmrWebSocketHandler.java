@@ -120,6 +120,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
                     case "SIMULATION_START":
                         handleStimulatorStart();
                         break;
+                    case "MISSION_REQ":
                     default:
                         log.warn("Unknown message: {}", msgName);
                 }
