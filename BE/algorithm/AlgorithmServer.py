@@ -242,8 +242,10 @@ def listen_loop():
             cancelled_amrs = []
             inputMissionType = "START"
         elif raw_value.lower() == "edge cut":
+            print("🚀 [edge cut] 엣지 컷 들어옴")
             cutEdge = int(payload.get("cutEdge"))
             cancelled_amrs = payload.get("cancelledAmrs", [])
+            print(f"자를 엣지 {cutEdge} 취소된 AMR {cancelled_amrs}")
             api.mapInit(cutEdge)
             if len(cancelled_amrs)!=0:
                 continue
@@ -252,9 +254,10 @@ def listen_loop():
             2. (시작위치와,AMRID)를 api서버로 보내준다음 ASTAR알고리즘을 돌린다.
             """
             startCancelStartEndNode=findStartCancelledAmrs(cancelled_amrs)
+            print("시작과 끝노드",startCancelStartEndNode)
             assign=api.calEdgeCutRoute(startCancelStartEndNode,cancelled_amrs)
             all_results = build_results_from_assign(assign)
-            
+            print(all_results)
             print("")
             if all_results:
                 payload = {
