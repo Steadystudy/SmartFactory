@@ -2,6 +2,7 @@ package com.ssafy.flip.domain.status.dto.response;
 
 import com.ssafy.flip.domain.status.entity.AmrStatusRedis;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 public record AmrMissionResponseDTO(
@@ -19,7 +20,7 @@ public record AmrMissionResponseDTO(
     float targetX,
     float targetY,
     int expectedArrival,
-    LocalDateTime startedAt
+    Long realArrival
 ) {
     public static AmrMissionResponseDTO from(AmrStatusRedis amrStatusRedis, AmrMissionDTO missionDTO) {
         int submissionId = amrStatusRedis.getSubmissionId();
@@ -45,7 +46,7 @@ public record AmrMissionResponseDTO(
                 targetX,
                 targetY,
                 missionDTO.expectedArrival(),
-                missionDTO.startedAt()
+                Duration.between(missionDTO.startedAt(), LocalDateTime.now()).getSeconds()
         );
     }
 

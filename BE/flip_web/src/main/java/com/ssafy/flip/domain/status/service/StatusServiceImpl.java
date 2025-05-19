@@ -121,9 +121,15 @@ public class StatusServiceImpl implements StatusService{
 
             if (routeList != null && !routeList.isEmpty()) {
                 try {
-                    System.out.println(routeList.getFirst());
                     RouteDTO firstRoute = routeList.getFirst();
-                    LocalDateTime startedAt = LocalDateTime.parse(firstRoute.getStartedAt(), formatter);
+                    String startedAtStr = firstRoute.getStartedAt();
+
+                    if (startedAtStr == null || startedAtStr.isBlank()) {
+                        System.err.println("[경고] startedAt 값이 null이거나 빈 문자열입니다. amrId: " + amr.getAmrId());
+                        continue;
+                    }
+
+                    LocalDateTime startedAt = LocalDateTime.parse(startedAtStr, formatter);
 
                     LocalDateTime effectiveStartTime = startedAt.isBefore(targetTime) ? targetTime : startedAt;
 
@@ -190,7 +196,7 @@ public class StatusServiceImpl implements StatusService{
             data.add(new ProductionResponseDTO.ProductionDataDTO(
                     hour,                            // timestamp (시간)
                     (int) productionCount*10,           // production (해당 시간대의 MissionLog 개수)
-                    150                               // target 고정값
+                    1500                               // target 고정값
             ));
         }
 
