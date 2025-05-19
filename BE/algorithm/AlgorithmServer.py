@@ -133,7 +133,8 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
         else:
             #banlist가 잘못들어가고 있음 =꿀발라 놓는 이유
             ban_work_list.append(node_id)
-            ban_work_list.append(submission_nodes[-1])
+            if len(submission_nodes)!=0:
+                ban_work_list.append(submission_nodes[-1])
 
     return robot_list,ban_work_list
         
