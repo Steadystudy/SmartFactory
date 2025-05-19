@@ -4,10 +4,11 @@ import { useModelStore } from '@/shared/model/store';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { damp3 } from 'maath/easing';
 
 export const useCameraFollow = () => {
   const { getSelectedModel } = useModelStore();
-  const { selectedAmrId } = useSelectedAMRStore();
+  const selectedAmrId = useSelectedAMRStore((state) => state.selectedAmrId);
   const controlsRef = useRef<MapControlsImpl>(null);
   const targetPosition = useRef(new THREE.Vector3());
   const cameraPosition = useRef(new THREE.Vector3());
@@ -49,11 +50,10 @@ export const useCameraFollow = () => {
         targetPosition.current.z + offsetZ,
       );
 
-      // lerp를 사용하여 부드럽게 이동
-      const lerpFactor = Math.min(1, delta * 5); // 이동 속도 조절 (5는 속도 계수)
-
-      currentTarget.lerp(targetPosition.current, lerpFactor);
-      camera.position.lerp(cameraPosition.current, lerpFactor);
+      // damp3를 사용하여 부드럽게 이동
+      const damping = 0.25; // 감쇠 계수 (실험적으로 조정)
+      damp3(currentTarget, targetPosition.current, damping, delta);
+      damp3(camera.position, cameraPosition.current, damping, delta);
 
       controls.update();
     }

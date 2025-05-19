@@ -30,7 +30,7 @@ export const Map3D = () => {
         action?.play();
       }
     });
-  }, [actions, lines]);
+  }, [actions]);
 
   return (
     <>
