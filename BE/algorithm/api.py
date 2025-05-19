@@ -221,12 +221,12 @@ def hungarian(robotList, taskList):
 
         elif needs_unload(dest):
             to_dest, c1 = aStar(start_node, dest)
-            to_next, c2 = aStar(dest, (dest % 10) + 50, c1 if to_dest else 0)
+            to_next, c2 = aStar(dest, (dest - 1) % 10 + 1) + 50, c1 if to_dest else 0)
             if to_dest and to_next:
                 final_path = to_dest + to_next
                 total_cost = c1 + c2
             else:
-                print(f"❌ 비적재 경로 없음: {start_node} → {dest} → {(dest % 10) + 50}")
+                print(f"❌ 비적재 경로 없음: {start_node} → {dest} → {((dest - 1) % 10 + 1) + 50}")
                 continue
 
         else:
@@ -240,6 +240,36 @@ def hungarian(robotList, taskList):
     #print(f"\n✅ 총 거리 비용: {total:.2f}")
     return [(robotList[i], taskList[j],missions[dest],aStarResult[i][0], aStarResult[i][1])
             for i, j in zip(row_ind, col_ind)], total
+
+def assign_charging_spots(chargeStartNode, zones,amrs):
+    assigned_zones = []
+    results = []
+
+    for index,start in enumerate(chargeStartNode):
+        if 1<=start<=10 or 21<=start<=30 or 41<=start<=50:
+            continue
+        best_path = None
+        best_time = float('inf')
+        best_zone = None
+
+        for zone in zones:
+            if zone in assigned_zones:
+                continue
+
+            path, cost = aStar(start, zone)
+            if cost < best_time:
+                best_path = path
+                best_time = cost
+                best_zone = zone
+
+        if best_zone is not None:
+            assigned_zones.append(best_zone)
+            node_only_best_path = [node for node, _ in best_path]
+            results.append(((amrs[index], "dummy", "dummy"), (best_zone, "dummy"), missions[best_zone], node_only_best_path, best_time))
+
+    return results
+
+
 
 # --- 맨 아래의 “demo 코드” 삭제 -----------------------------
 # robot = 20
