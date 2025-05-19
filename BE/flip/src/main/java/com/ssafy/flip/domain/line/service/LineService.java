@@ -19,4 +19,7 @@ public interface LineService {
 
     void updateMissionAssignment(String missionId);
 
+    void brokeLine(Long id);
+
+    void repairLine(Long id);
 }

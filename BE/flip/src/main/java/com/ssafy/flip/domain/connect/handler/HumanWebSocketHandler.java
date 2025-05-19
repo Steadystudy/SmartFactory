@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.connect.dto.request.HumanSaveRequestDTO;
 import com.ssafy.flip.domain.connect.dto.request.HumanStartRequestDTO;
 import com.ssafy.flip.domain.connect.service.HumanWebSocketService;
+import com.ssafy.flip.domain.line.service.LineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -14,6 +15,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @Component
 @RequiredArgsConstructor
@@ -25,6 +27,8 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
     private final ThreadPoolTaskExecutor humanTaskExecutor;
 
     private final HumanWebSocketService humanWebSocketService;
+
+    private final LineService lineService;
 
     private WebSocketSession session;
 
@@ -69,5 +73,15 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
         HumanStartRequestDTO requestDTO = new HumanStartRequestDTO(new HumanStartRequestDTO.Header("MOVE_TRIGGER", null), new HumanStartRequestDTO.Body());
         String payload = objectMapper.writeValueAsString(requestDTO);
         this.session.sendMessage(new TextMessage(payload));
+        // 20초 후에 비동기 작업 실행
+        CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(20000); // 20초 대기
+                lineService.repairLine(10L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                e.printStackTrace();
+            }
+        });
     }
 }

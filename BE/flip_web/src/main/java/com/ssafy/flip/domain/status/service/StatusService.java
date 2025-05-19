@@ -16,4 +16,5 @@ public interface StatusService {
     ProductionResponseDTO getProductionStatus();
 
     HeatMapResponseDTO getHeatMapStatus();
+
 }
