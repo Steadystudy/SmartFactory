@@ -10,9 +10,12 @@ import { useCameraFollow } from '../lib';
 import { MapPointer } from '@/entities/3dPointer';
 import { RoutePath } from './RoutePath';
 import * as THREE from 'three';
+import { PersonModel } from '@/entities/personModel';
+import { usePersonModelStore } from '@/shared/store/person-model-store';
 
 const Warehouse = () => {
   const { selectedAmrId, startX, startY, targetX, targetY } = useSelectedAMRStore();
+  const { isRepairing } = usePersonModelStore();
   const { controlsRef } = useCameraFollow();
   const lastValidTarget = useRef<THREE.Vector3>(new THREE.Vector3(40, 0, 40));
   const isUpdating = useRef(false);
@@ -86,6 +89,9 @@ const Warehouse = () => {
 
       {/* Route 경로 시각화 */}
       {selectedAmrId && <RoutePath />}
+
+      {/* 정비 상태일 때만 PersonModel 렌더링 */}
+      {isRepairing && <PersonModel />}
 
       <MapControls
         ref={controlsRef}

@@ -1,7 +1,8 @@
 import { Card } from '@/components/ui/card';
 import { FACILITY_CARD_STATUS } from '../model';
-import { BadgeAlert } from 'lucide-react';
+import { BadgeAlert, Wrench } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { usePersonModelStore } from '@/shared/store/person-model-store';
 
 interface FacilityCardProps {
   data: FACILITY_CARD_STATUS;
@@ -9,8 +10,13 @@ interface FacilityCardProps {
 
 export function FacilityCard({ data }: FacilityCardProps) {
   const { lineId, amount, status } = data;
+  const { setRepairing } = usePersonModelStore();
   const getStatusColor = (status: boolean) => (status ? 'text-green-400' : 'text-red-400');
   const getStatusText = (status: boolean) => (status ? '정상' : '이상');
+
+  const handleRepair = () => {
+    setRepairing(true);
+  };
 
   return (
     <Card className='w-full rounded-2xl bg-[#393E4B] p-6 pr-12 mb-6 flex flex-row items-center shadow-lg relative'>
@@ -21,8 +27,16 @@ export function FacilityCard({ data }: FacilityCardProps) {
             <TooltipTrigger>
               <BadgeAlert className={`size-4 ${getStatusColor(status)} cursor-pointer`} />
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent className='flex flex-col items-center gap-2'>
               <p>{getStatusText(status)}</p>
+              {!status && (
+                <button
+                  className='bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded flex items-center gap-1 text-sm'
+                  onClick={handleRepair}
+                >
+                  <Wrench className='w-4 h-4' />
+                </button>
+              )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
