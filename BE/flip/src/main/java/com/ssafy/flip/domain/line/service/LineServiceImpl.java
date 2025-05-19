@@ -45,6 +45,7 @@ public class LineServiceImpl implements LineService {
     @Override
     public void disableMissionAssignment(String missionId){
         String redisKey = "MISSION_PT:" + missionId;
+        System.out.println(missionId);
         redisTemplate.opsForValue().set(redisKey, "-1");
     }
 
