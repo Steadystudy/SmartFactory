@@ -71,18 +71,24 @@ public class AlgorithmResultConsumer {
 //            }
 
             for (MissionResponse res : responses) {
-                List<MissionResponse> split = splitRoute(res);
-                MissionResponse now = split.get(0);
-
-                // 첫 미션 즉시 처리
-                processMission(now);
-
-                // 두 번째 미션은 해시맵에 저장
-                if (split.size() > 1) {
-                    MissionResponse delayed = split.get(1);
+                if (res.getMissionType().equals("CHARGING")){
+                    processMission(res);
                     getDelayedMissionMap().remove(res.getAmrId());
-                    delayedMissionMap.put(delayed.getAmrId(), delayed);
-                    //log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
+                }
+                else{
+                    List<MissionResponse> split = splitRoute(res);
+                    MissionResponse now = split.get(0);
+
+                    // 첫 미션 즉시 처리
+                    processMission(now);
+
+                    // 두 번째 미션은 해시맵에 저장
+                    if (split.size() > 1) {
+                        MissionResponse delayed = split.get(1);
+                        getDelayedMissionMap().remove(res.getAmrId());
+                        delayedMissionMap.put(delayed.getAmrId(), delayed);
+                        //log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
+                    }
                 }
             }
 
