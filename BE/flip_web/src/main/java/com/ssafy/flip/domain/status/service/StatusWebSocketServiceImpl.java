@@ -43,6 +43,11 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
     private final WebClient webClient;
 
+    private LocalDateTime brokenTime;
+    private int brokenAmount;
+    private boolean isBroken = false;
+    private int brokenCount = 0;
+
     @Scheduled(fixedRate = 100)
     private void broadcastRealTimeStatus() {
         List<AmrStatusRedis> amrStatusIterable = amrStatusRedisManualRepository.findAllAmrStatus();
@@ -105,19 +110,6 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
         messagingTemplate.convertAndSend("/amr/line", responseDTO);
     }
 
-//    @Override
-//    @Scheduled(fixedRate = 1000)
-//    public void getRouteStatus() {
-//        for(int i = 1; i <= 20; i++) {
-//            String amrId = String.format("AMR%03d", i);
-//            AmrStatusRedis amrStatusRedis = amrStatusRedisManualRepository.findByAmrId(amrId)
-//                    .orElseThrow();
-//
-//            MissionStatusResponseDTO responseDTO = MissionStatusResponseDTO.from(amrStatusRedis);
-//            messagingTemplate.convertAndSend("/amr/route" + amrId, responseDTO);
-//        }
-//    }
-
     private ThreadPoolTaskScheduler initScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(10); // 동시 AMR 수
@@ -133,7 +125,7 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                 MissionStatusResponseDTO dto = MissionStatusResponseDTO.from(status);
                 messagingTemplate.convertAndSend("/amr/route/" + amrId, dto);
             });
-        }, 500); // 0.5초 간격
+        }, 200); // 0.5초 간격
 
         scheduledTasks.put(amrId, future);
     }
@@ -186,14 +178,33 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
 
         for(LineStatusRedis lineStatusRedis : lineList){
             long elapsedSeconds = java.time.Duration.between(lineStatusRedis.getLastInputTime(), now).getSeconds();
+
             float cycleTime = lineStatusRedis.getCycleTime() * 10;
 
             double ratio = (double) elapsedSeconds / cycleTime;
+
             int amount = 0;
-            if(ratio > 0) {
+            if(ratio >= 0) {
                 amount = (int) Math.min(maxAmount, Math.floor((1 - ratio) * maxAmount));
             }
             if(amount < 0) amount = 0;
+
+            if(!lineStatusRedis.getStatus()) {
+                amount = brokenAmount;
+                isBroken = true;
+                brokenTime = LocalDateTime.now();
+            } else if(lineStatusRedis.getLineId() == 10L) {
+                if(isBroken && lineStatusRedis.getLastInputTime().isBefore(brokenTime)) {
+                    amount = brokenAmount - brokenCount;
+                    if(amount < 0) amount = 0;
+                    amountMap.put(lineStatusRedis, amount);
+                    brokenCount++;
+                    continue;
+                }
+                brokenCount = 0;
+                brokenAmount = amount;
+            }
+
 
             amountMap.put(lineStatusRedis, amount);
         }
@@ -206,13 +217,5 @@ public class StatusWebSocketServiceImpl implements StatusWebSocketService {
                         (e1, e2) -> e1,
                         LinkedHashMap::new
                 ));
-    }
-
-    @Scheduled(fixedRate = 100)
-    private void broadcastHumanStatus() {
-        HumanStatusRedis humanStatusList = humanStatusRedisManualRepository.findAllHumanStatus();
-        if(humanStatusList != null) {
-            messagingTemplate.convertAndSend("/amr/human", humanStatusList);
-        }
     }
 }

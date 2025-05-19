@@ -68,4 +68,5 @@ public class StatusController {
     public ResponseEntity<HeatMapResponseDTO> getHeatMapStatus(){
         return ResponseEntity.ok(statusService.getHeatMapStatus());
     }
+
 }
