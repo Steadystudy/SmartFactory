@@ -202,7 +202,7 @@ def build_results_from_assign(assign):
                 path = submission_nodes[:-1] + path
             else:
                 path = submission_nodes + path
-            print(f"최종 경로 :{path} , ID:{int(h.get("submissionId", 0))}")
+            print(f'최종 경로 :{path} , ID:{int(h.get("submissionId", 0))}')
 
         result = {
             "amrId": amr_id,
