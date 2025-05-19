@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { AMR_CARD_STATUS } from '@/features/control-panel/model';
 
 interface SelectedAMRState {
   selectedAmrId: string | null;
@@ -10,6 +11,7 @@ interface SelectedAMRState {
   setTargetPosition: (x: number, y: number) => void;
   setStartPosition: (x: number, y: number) => void;
   reset: () => void;
+  toggleSelectedAMR: (amr: AMR_CARD_STATUS) => void;
 }
 
 export const useSelectedAMRStore = create<SelectedAMRState>((set) => ({
@@ -23,4 +25,24 @@ export const useSelectedAMRStore = create<SelectedAMRState>((set) => ({
   setStartPosition: (x, y) => set({ startX: x, startY: y }),
   reset: () =>
     set({ selectedAmrId: null, targetX: null, targetY: null, startX: null, startY: null }),
+  toggleSelectedAMR: (amr) =>
+    set((state) => {
+      if (state.selectedAmrId === amr.amrId) {
+        return {
+          selectedAmrId: null,
+          targetX: 0,
+          targetY: 0,
+          startX: 0,
+          startY: 0,
+        };
+      } else {
+        return {
+          selectedAmrId: amr.amrId,
+          targetX: amr.targetX,
+          targetY: amr.targetY,
+          startX: amr.startX,
+          startY: amr.startY,
+        };
+      }
+    }),
 }));

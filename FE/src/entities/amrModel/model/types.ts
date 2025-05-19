@@ -40,6 +40,7 @@ export interface AMRInfo {
   prevY: number;
   expectedArrival: number;
   startedAt: string;
+  realArrival: number;
 }
 
 // 모델 정보 인터페이스 (3D 렌더링용)
