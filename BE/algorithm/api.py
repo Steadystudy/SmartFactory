@@ -221,7 +221,7 @@ def hungarian(robotList, taskList):
 
         elif needs_unload(dest):
             to_dest, c1 = aStar(start_node, dest)
-            to_next, c2 = aStar(dest, (dest - 1) % 10 + 1) + 50, c1 if to_dest else 0)
+            to_next, c2 = aStar(dest, ((dest - 1) % 10 + 1) + 50, c1 if to_dest else 0)
             if to_dest and to_next:
                 final_path = to_dest + to_next
                 total_cost = c1 + c2
