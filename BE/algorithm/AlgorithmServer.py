@@ -104,20 +104,17 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
         
         h = r.hgetall(key)
         amr_id = h.get("amrId", f"AMR{i:03}")
-
+        node_id = int(h.get("currentNode"))  # 기본값
         # submissionList가 존재할 때 처리
         if "submissionList" in h:
             try:
                 submission_list = [json.loads(s) for s in json.loads(h["submissionList"])]
                 # submissionNode 목록만 추출
-                submission_nodes = [s.get("submissionNode") for s in submission_list]
+                submission_nodes = [int(s.get("submissionNode")) for s in submission_list]
 
                 # currentNode가 submissionList에 있다면, 그 다음 submissionNode 사용
                 if len(submission_nodes)!=0:
                     node_id = submission_nodes[int(h.get("submissionId", 0))]
-                else:
-                    node_id = int(h.get("currentNode"))  # 기본값
-                    pass  # 그대로 current_node 유지
 
             except Exception as e:
                 pass
@@ -131,10 +128,12 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
                 if amr_id==triggered_amr and inputMissionType=="CHARGING":
                     robot_list.append((amr_id,node_id,0))
         else:
-            #banlist가 잘못들어가고 있음 =꿀발라 놓는 이유
-            ban_work_list.append(node_id)
-            if len(submission_nodes)!=0:
-                ban_work_list.append(submission_nodes[-1])
+            if 1<=node_id<=10:
+                ban_work_list.append(int(h.get("finalGoal")))
+            else:
+                ban_work_list.append(node_id)
+        if loading==1:
+            ban_work_list.append(int(h.get("finalGoal")))
 
     return robot_list,ban_work_list
         
@@ -234,6 +233,7 @@ def listen_loop():
             continue
 
         raw_value = msg.value().decode("utf-8").strip()
+        print(f"📩 수신 메시지: {raw_value}")
 
         # ✅ 케이스 1: "simulator start"
         if raw_value.lower() == "simulator start":
@@ -241,34 +241,6 @@ def listen_loop():
             triggered_amr = None
             cancelled_amrs = []
             inputMissionType = "START"
-        elif raw_value.lower() == "edge cut":
-            print("🚀 [edge cut] 엣지 컷 들어옴")
-            cutEdge = int(payload.get("cutEdge"))
-            cancelled_amrs = payload.get("cancelledAmrs", [])
-            print(f"자를 엣지 {cutEdge} 취소된 AMR {cancelled_amrs}")
-            api.mapInit(cutEdge)
-            if len(cancelled_amrs)!=0:
-                continue
-            """
-            1. cancelled_amrs를 시작위치를 들고온다.
-            2. (시작위치와,AMRID)를 api서버로 보내준다음 ASTAR알고리즘을 돌린다.
-            """
-            startCancelStartEndNode=findStartCancelledAmrs(cancelled_amrs)
-            print("시작과 끝노드",startCancelStartEndNode)
-            assign=api.calEdgeCutRoute(startCancelStartEndNode,cancelled_amrs)
-            all_results = build_results_from_assign(assign)
-            print(all_results)
-            print("")
-            if all_results:
-                payload = {
-                    "triggeredAmr": triggered_amr,  # None 일 수도 있음
-                    "missions": all_results
-                }
-                producer.produce("algorithm-result", json.dumps(payload))
-                producer.flush()
-                #print(f"📤 Kafka 전송 완료 (trigger: {triggered_amr})")
-            continue
-
 
         # ✅ 케이스 2: JSON payload
         elif raw_value.startswith("{"):
@@ -278,6 +250,32 @@ def listen_loop():
                 print(f"❌ JSON 파싱 실패: {e}")
                 continue
 
+            # ✅ edge cut 처리
+            if "cutEdge" in payload:
+                print("🚀 [edge cut] 엣지 컷 들어옴")
+                cutEdge = int(payload.get("cutEdge") or 0)
+                cancelled_amrs = payload.get("cancelledAmrs") or []
+                print(f"자를 엣지 {cutEdge} 취소된 AMR {cancelled_amrs}")
+                api.mapInit(cutEdge)
+
+                if len(cancelled_amrs)==0:
+                    continue
+
+                startCancelStartEndNode = findStartCancelledAmrs(cancelled_amrs)
+                print("시작과 끝노드", startCancelStartEndNode)
+                assign = api.calEdgeCutRoute(startCancelStartEndNode, cancelled_amrs)
+                all_results = build_results_from_assign(assign)
+                print(all_results)
+                if all_results:
+                    payload = {
+                        "triggeredAmr": None,
+                        "missions": all_results
+                    }
+                    producer.produce("algorithm-result", json.dumps(payload))
+                    producer.flush()
+                continue
+
+            # ✅ 일반적인 미션 완료 메시지 처리
             triggered_amr = payload.get("amrId")
             cancelled_amrs = payload.get("cancelledAmrs", [])
             inputMissionType = payload.get("missionType")
@@ -287,11 +285,11 @@ def listen_loop():
                 print("⚠️ triggered_amr 없음 → 알고리즘 실행 생략")
                 continue
 
-
         # ✅ 예외: 알 수 없는 형식
         else:
             print(f"⚠️ 비정형 메시지 무시됨: {raw_value}")
             continue
+
 
 
         # ✅ 알고리즘 실행 부분 공통
