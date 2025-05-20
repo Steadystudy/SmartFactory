@@ -1,6 +1,6 @@
 'use client';
 
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { MapControls } from '@react-three/drei';
 import { useModelStore } from '@/shared/model/store';
 import { Html } from '@react-three/drei';
@@ -17,7 +17,13 @@ import { AMRLegend } from './AMRLegend';
 import { RoutePath } from './RoutePath';
 
 // AMR 2D 렌더러 컴포넌트
-const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
+const AMR2DRenderer = ({
+  amrInfo,
+  showAmrId = true,
+}: {
+  amrInfo: AMR_CURRENT_STATE;
+  showAmrId?: boolean;
+}) => {
   const { state, amrId } = amrInfo;
   const color = AMR_STATE_COLORS[state] || '#9E9E9E';
   const { groupRef } = useAMRAnimation(amrInfo);
@@ -60,13 +66,13 @@ const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
       </group>
 
       {/* AMR ID 표시 */}
-      <mesh position={[0, 1, 0]}>
-        <boxGeometry args={[0.5, 0.1, 0.5]} />
-        <meshStandardMaterial color='#FFFFFF' />
-        <Html position={[0, 0.1, 0]} center>
-          <div className='text-xs font-bold text-black'>{amrId}</div>
-        </Html>
-      </mesh>
+      {showAmrId && (
+        <mesh position={[0, 1, 0]}>
+          <Html position={[0, 0.1, 0]} center>
+            <div className='text-xs font-bold text-black'>{amrId}</div>
+          </Html>
+        </mesh>
+      )}
     </group>
   );
 };
@@ -75,6 +81,9 @@ const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
 const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
   const { models } = useModelStore();
   const { controlsRef } = useCameraFollow();
+  const { camera } = useThree();
+  // zoom이 9 이하일 때만 라벨 표시
+  const showAmrId = camera.type === 'OrthographicCamera' ? camera.zoom >= 9 : false;
 
   const BOUNDS = {
     MIN: 0,
@@ -106,6 +115,7 @@ const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
         <AMR2DRenderer
           key={amrInfo.amrId}
           amrInfo={{ ...amrInfo, dir: amrInfo.dir - Math.PI / 2 }}
+          showAmrId={showAmrId}
         />
       ))}
       {showHeatmap && <HeatmapLayer />}

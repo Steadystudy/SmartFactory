@@ -62,4 +62,5 @@ export interface Model3DProps {
   scene: Group<Object3DEventMap>;
   className?: string;
   amrState: AMR_CURRENT_STATE;
+  showAmrId?: boolean;
 }
