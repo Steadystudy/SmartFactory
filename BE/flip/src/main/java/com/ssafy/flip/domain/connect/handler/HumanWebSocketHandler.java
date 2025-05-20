@@ -3,10 +3,13 @@ package com.ssafy.flip.domain.connect.handler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.flip.domain.connect.dto.request.HumanSaveRequestDTO;
 import com.ssafy.flip.domain.connect.dto.request.HumanStartRequestDTO;
+import com.ssafy.flip.domain.connect.service.AlgorithmResultConsumer;
+import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
 import com.ssafy.flip.domain.connect.service.HumanWebSocketService;
 import com.ssafy.flip.domain.line.service.LineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
@@ -31,6 +34,14 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
     private final LineService lineService;
 
     private WebSocketSession session;
+
+    private final AlgorithmTriggerProducer trigger;
+
+    private final AlgorithmResultConsumer algorithmResultConsumer;
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private String lastMatchedKey = null;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -64,6 +75,100 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
             HumanSaveRequestDTO requestDTO = objectMapper.convertValue(json, HumanSaveRequestDTO.class);
 
             humanWebSocketService.saveHuman(requestDTO);
+
+            List<String> cancelledAmrs = new ArrayList<>();
+
+            Map<String, Object> payloadMap = new HashMap<>();
+            payloadMap.put("EDGE CUT", null);
+            String matchedKey = null;
+
+            int edgeId = 0;
+            int node1 = 0;
+            int node2 = 0;
+            if(Math.abs(requestDTO.body().worldX() - 70.5F) <= 1) {
+                edgeId = 420;
+                node1 = 130;
+                node2 = 206;
+                matchedKey = "A";
+            } else if(Math.abs(requestDTO.body().worldX() - 73.5F) <= 1) {
+                edgeId = 419;
+                node1 = 131;
+                node2 = 207;
+                matchedKey = "B";
+            } else if(Math.abs(requestDTO.body().worldX() - 76.5F) <= 1) {
+                edgeId = 418;
+                node1 = 132;
+                node2 = 208;
+                matchedKey = "C";
+            } else if(requestDTO.body().worldX() - 69.5F < 0){
+                if (lastMatchedKey.equals("D")) {
+                return;
+                }
+                lastMatchedKey = "D";
+                payloadMap.put("cancelledAmrs", new ArrayList<>());
+                payloadMap.put("cutEdge", edgeId);
+                String payload = objectMapper.writeValueAsString(payloadMap);
+                trigger.run(payload);
+                return;
+            } else {
+                return;
+            }
+
+            if (matchedKey != null && matchedKey.equals(lastMatchedKey)) {
+                return;
+            }
+
+            for (int i = 1; i <= 20; i++) {
+                String amrCancelId = String.format("AMR%03d", i);
+                String amrCancelKey = "AMR_STATUS:" + amrCancelId;
+
+                Map<Object, Object> map = stringRedisTemplate.opsForHash().entries(amrCancelKey);
+
+                boolean shouldCancel = false;  // 기본은 취소 X
+
+                // ✅ 예외 2,3: submissionList 조건
+                int submissionId = 0;
+                try {
+                    submissionId = Integer.parseInt(map.getOrDefault("submissionId", "0").toString());
+                } catch (Exception e) {
+                    // 파싱 실패 → 기본 shouldCancel 유지
+                }
+
+                Object listRaw = map.get("submissionList");
+                if (listRaw == null) continue;
+
+                List<Map<String, Object>> parsedList = new ArrayList<>();
+                try {
+                    List<String> rawList = new ObjectMapper().readValue(listRaw.toString(), List.class);
+                    for (String item : rawList) {
+                        parsedList.add(new ObjectMapper().readValue(item, Map.class));
+                    }
+                } catch (Exception e) {
+                    continue;
+                }
+
+                for(int j = submissionId; j < parsedList.size(); j++){
+                    Map<String, Object> parsed = parsedList.get(j);
+                    if((Integer) parsed.get("submissionNode") == node1 || (Integer) parsed.get("submissionNode") == node2){
+                        shouldCancel = true;
+                        break;
+                    }
+                }
+
+                // ✅ 최종 취소
+                if (shouldCancel) {
+                    algorithmResultConsumer.sendCancelMission(amrCancelId);
+                    cancelledAmrs.add(amrCancelId);
+                }
+            }
+
+            lastMatchedKey = matchedKey;
+
+            payloadMap.put("cancelledAmrs", cancelledAmrs);
+            payloadMap.put("cutEdge", edgeId);
+            String payload = objectMapper.writeValueAsString(payloadMap);
+            System.out.println("Edge cut: "+edgeId);
+            trigger.run(payload);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
