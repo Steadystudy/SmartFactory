@@ -37,8 +37,12 @@ export const VisualizationPanel = () => {
       <div className='h-full'>
         <Tabs defaultValue={initialView} className='w-full h-full'>
           <TabsList className='grid w-full grid-cols-2 cursor-pointer bg-white/10'>
-            <TabsTrigger value='3d'>공장 전체 View</TabsTrigger>
-            <TabsTrigger value='2d'>Top View</TabsTrigger>
+            <TabsTrigger className='cursor-pointer' value='3d'>
+              공장 전체 View
+            </TabsTrigger>
+            <TabsTrigger className='cursor-pointer' value='2d'>
+              Top View
+            </TabsTrigger>
           </TabsList>
           <div className='h-full mt-4 cursor-grab'>
             <Suspense fallback={<Loading />}>
