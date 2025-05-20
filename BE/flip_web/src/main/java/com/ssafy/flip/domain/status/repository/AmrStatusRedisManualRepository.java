@@ -92,6 +92,7 @@ public class AmrStatusRedisManualRepository {
 
     private List<SubmissionDTO> parseSubmissionList(Object raw) {
         try {
+            if (raw == null) return null;
             // raw는 Redis에서 꺼낸 그대로: String
             if (raw instanceof String rawStr) {
                 // 1단계: 이중 직렬화 제거
