@@ -4,6 +4,9 @@ import React, { useEffect, useState } from 'react';
 import { StatsCard, OverviewChart } from '@/features/dashboard';
 import { useFetchDashboardStats } from '@/features/dashboard/api/dashboard';
 import { ThumbnailViewer } from '@/features/viewer';
+import { ThumbnailAMRLegend } from '@/features/viewer/ui/ThumbnailAMRLegend';
+import Link from 'next/link';
+import { Maximize2 } from 'lucide-react';
 
 export default function Home() {
   const { data: cardData, isLoading, error, dataUpdatedAt } = useFetchDashboardStats();
@@ -63,8 +66,18 @@ export default function Home() {
         <div className='h-full'>
           <div className='h-full p-6 bg-[#020817]/50 backdrop-blur-md rounded-xl border border-blue-900/20'>
             <h2 className='mb-3 text-lg font-semibold text-white'>공장 지도</h2>
-            <div className='bg-[#1F2937] h-[90%] rounded-lg flex items-center justify-center'>
+            <div className='bg-[#1F2937] h-[90%] rounded-lg flex items-center justify-center relative'>
               <ThumbnailViewer />
+              <div className="absolute bottom-4">
+                <ThumbnailAMRLegend />
+              </div>
+              <Link 
+                href="/control?view=2d" 
+                className="absolute right-2 top-2 p-2 bg-black/30 hover:bg-black/60 text-white rounded-lg hover:scale-105"
+                title="상세 보기"
+              >
+                <Maximize2 size={15} />
+              </Link>
             </div>
           </div>
         </div>
