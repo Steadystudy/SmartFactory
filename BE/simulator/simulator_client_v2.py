@@ -76,7 +76,7 @@ def handle_map_info(data, ws):
     global map_data, simulation_started
     if not simulation_started:
         simulation_started = True
-        print("[MAP_INFO] 맵 데이터 수신 완료")
+        # print("[MAP_INFO] 맵 데이터 수신 완료", data)
         raw_map = data['body']['mapData']
 
         nodes = {}
@@ -113,8 +113,12 @@ def handle_map_info(data, ws):
     #     print("⚠️ 시뮬레이션 이미 시작됨, 재시작 생략")
 
 
+import threading
+import json
+from datetime import datetime
+
 def handle_mission_assign(data):
-    if ("AMR009" == data['header']['amrId']):
+    if ("AMR006" == data['header']['amrId']):
         print("[MISSION_ASSIGN] 미션 수신:", data)
     mission = data['body']
     target_amr_id = data['header']['amrId']
@@ -122,6 +126,11 @@ def handle_mission_assign(data):
     for amr in amrs:
         if amr.id != target_amr_id:
             continue
+
+        # 새 미션 수신 즉시 기존 타이머 취소
+        if hasattr(amr, 'mission_request_timer') and amr.mission_request_timer:
+            amr.mission_request_timer.cancel()
+            amr.mission_request_timer = None
 
         # 1. 동시성 방지용 락 걸고, 마지막 완료 sub ID 읽기
         with LOCK:
@@ -138,7 +147,6 @@ def handle_mission_assign(data):
             filtered_subs = raw_subs
 
         if not filtered_subs:
-            # print(f"⚠️ {amr.id} 수행할 서브미션이 없습니다.")
             return
 
         # 3. 기존 미션 즉시 중단, 새로운 서브미션만 큐에 넣기
@@ -149,22 +157,51 @@ def handle_mission_assign(data):
             "missionType": mission["missionType"],
             "submissions": filtered_subs
         })
-        if ("AMR009" == data['header']['amrId']):
+        if ("AMR006" == data['header']['amrId']):
             print(f"✅ {amr.id} 새 미션 수락 완료 (sub {filtered_subs[0]['submissionId']}부터 수행)")
         return
 
 
-
 def handle_mission_cancel(data):
-    if("AMR009" == data['header']['amrId']):
+    if ("AMR006" == data['header']['amrId']):
         print("[MISSION_CANCEL] 미션 취소 수신:", data)
     target_amr_id = data['header']['amrId']
 
     for amr in amrs:
         if amr.id == target_amr_id:
+            # ① 취소 플래그 & 즉시 정지
             amr.interrupt_flag = True
-            amr.current_speed=0
+            amr.current_speed = 0
+
+            # ② 기존 타이머가 있으면 취소
+            if hasattr(amr, 'mission_request_timer') and amr.mission_request_timer:
+                amr.mission_request_timer.cancel()
+
+            # ③ 5초 후에도 새 미션이 없으면 요청
+            def request_mission():
+                if amr.current_mission_data is None:
+                    req = {
+                        "header": {
+                            "msgName": "MISSION_REQ",
+                            "time": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                        },
+                        "body": {
+                            "amrId": amr.id
+                        }
+                    }
+                    idx = int(amr.id[-3:]) - 1
+                    try:
+                        ws_clients[idx].send(json.dumps(req))
+                        print(f"▶ {amr.id} 미션 요청 전송")
+                    except Exception as e:
+                        print(f"❌ {amr.id} 미션 요청 실패: {e}")
+
+            amr.mission_request_timer = threading.Timer(5.0, request_mission)
+            amr.mission_request_timer.daemon = True
+            amr.mission_request_timer.start()
+
             return
+
 
 # ---------- 메시지 처리 함수 ----------
 def handle_traffic_permit(data):
@@ -288,6 +325,8 @@ class AMR:
         self.is_avoiding = False
         self.permit_requested = False
 
+        self.mission_request_timer = None
+
     def update_status(self):
         with LOCK:
             SHARED_STATUS[self.id] = {
@@ -380,7 +419,7 @@ class AMR:
         self.update_status()
 
     def move_to_node(self, node, edge, prev):
-        if(self.id == "AMR009"):
+        if(self.id == "AMR006"):
             print("목표 노드: ", node["id"])
         # ─── 상수 정의 ─────────────────────────────────────
         STOP_DIST = 1.2
@@ -433,14 +472,66 @@ class AMR:
         return_steps = 0
         return_dx = return_dy = 0.0
 
+        # ─── 회피 후 원래 방향 유지 스텝 수 & 플래그 ───────────────────
+        PRE_RETURN_STEPS = 50
+        saved_offset_x = 0.0
+        saved_offset_y = 0.0
+        pre_returned = False
+
         # ─── 이동 + 회피 루프 ────────────────────────────────
         for step_idx in range(steps):
             # 1) 시간 경과 & 전진
             yield self.env.timeout(REALTIME_INTERVAL)
+            # ── 사람과 충돌 우회 대기 ─────────────────────────
+            ps = SHARED_STATUS.get(person.id)
+            if ps:
+                px = ps['x'] - self.pos_x
+                py = ps['y'] - self.pos_y
+                dist_p = math.hypot(px, py)
+
+                # 전방 60°(±30°) 영역만 탐지
+                ANG_THRESH = 30  # 반각(°)
+                # 이동 벡터와 사람 벡터의 내적
+                dot = dx * px + dy * py
+                # 벡터 크기 곱
+                denom = math.hypot(dx, dy) * dist_p
+                # 코사인 임계값
+                cos_thresh = math.cos(math.radians(ANG_THRESH))
+
+                # 거리 2m 이내 & 두 벡터 각도 ≤ ±30°
+                if dist_p <= 2.0 and denom > 0 and dot / denom >= cos_thresh:
+                    # 사람이 완전히 벗어날 때까지 대기
+                    while True:
+                        yield self.env.timeout(REALTIME_INTERVAL)
+                        s2 = SHARED_STATUS.get(person.id)
+                        if not s2:
+                            break
+                        px2 = s2['x'] - self.pos_x
+                        py2 = s2['y'] - self.pos_y
+                        if math.hypot(px2, py2) > 2.0:
+                            yield self.env.timeout(0.5)
+                            break
+                    continue
+
             self.pos_x += dx
             self.pos_y += dy
 
-
+            # 3) 사전 복귀 트리거 (도착 PRE_RETURN_STEPS 전) — 한 번만
+            if (not pre_returned
+                    and (saved_offset_x != 0.0 or saved_offset_y != 0.0)
+                    and avoidance_steps == 0 and return_steps == 0
+                    and step_idx == steps - PRE_RETURN_STEPS):
+                pre_returned = True
+                return_steps = PRE_RETURN_STEPS
+                yield self.env.timeout(REALTIME_INTERVAL)
+                return_dx = -saved_offset_x / PRE_RETURN_STEPS
+                return_dy = -saved_offset_y / PRE_RETURN_STEPS
+                # 즉시 복귀 방향으로 회전
+                ang = math.atan2(return_dy, return_dx)
+                self.dir = (90 - math.degrees(ang) % 360) % 360
+                self.update_status()
+                # 재발동 방지
+                saved_offset_x = saved_offset_y = 0.0
 
             # 2) 측면 회피 중이면
             if avoidance_steps > 0:
@@ -453,18 +544,24 @@ class AMR:
                 # )
                 self.pos_x += avoidance_dx
                 self.pos_y += avoidance_dy
+                self.update_status()
+                yield self.env.timeout(REALTIME_INTERVAL/2)
                 avoidance_steps -= 1
                 # 회피 끝나면 복귀 설정
-                if avoidance_steps == 0:
-                    return_steps = avoidance_steps_orig
-                    return_dx, return_dy = -avoidance_dx, -avoidance_dy
-                    continue
+                # if avoidance_steps == 0:
+                #     # 복귀 세팅
+                #     return_steps = avoidance_steps_orig
+                #     return_dx, return_dy = -avoidance_dx, -avoidance_dy
+                continue
 
-            # 3) 복귀 중이면
+            # 5) 복귀 중이면
             if return_steps > 0:
                 self.pos_x += return_dx
                 self.pos_y += return_dy
+                self.update_status()
+                yield self.env.timeout(REALTIME_INTERVAL)
                 return_steps -= 1
+                continue
 
                 # if return_steps == 0:
                 #     print("[DEBUG] → 복귀 완료")
@@ -492,7 +589,7 @@ class AMR:
                 self.permit_requested = True
 
             # 6) 충돌 감지
-            if not self.collision_ignored:
+            if avoidance_steps == 0 and return_steps == 0 and not self.collision_ignored:
                 waiting_node = self.waiting_for_traffic[2]
                 for other_id, other in SHARED_STATUS.items():
                     if other_id == self.id:
@@ -510,17 +607,19 @@ class AMR:
                     # 충돌 조건
                     if dist <= STOP_DIST:
                         # 헤드온일 때만 측면 회피
-                        if heading_diff > 150:
+                        if heading_diff > 120:
                             # 측면 단위 벡터
                             latx, laty = -dy, dx
                             norm = math.hypot(latx, laty) or 1
                             latx, laty = latx / norm, laty / norm
 
                             # 10스텝 동안 부드럽게 회피
-                            avoidance_steps = 10
+                            avoidance_steps = 60
                             avoidance_dx = latx * per_step_dist
                             avoidance_dy = laty * per_step_dist
                             avoidance_steps_orig = avoidance_steps  # 복귀용 저장
+                            saved_offset_x = avoidance_dx * avoidance_steps_orig
+                            saved_offset_y = avoidance_dy * avoidance_steps_orig
                             break
 
                         # 그 외 기존 멈춤+백오프
@@ -570,7 +669,24 @@ class AMR:
         self.update_status()
 
         # 5. 노드 방향 회전 처리 (charging, docking 등)
-        if node["nodeType"] in ("CHARGING", "DOCKING"):
+        if node["nodeType"] == "DOCKING":
+            target_dir = node["direction"]
+            diff = (target_dir - self.dir + 360) % 360
+            if diff > 180:
+                diff -= 360
+
+            turn_speed = 360 / 3  # 120 deg/sec
+            turn_per_step = turn_speed * REALTIME_INTERVAL
+            steps_to_turn = int(abs(diff) / turn_per_step)
+
+            for _ in range(steps_to_turn):
+                yield self.env.timeout(REALTIME_INTERVAL)
+                self.dir = (self.dir + turn_per_step * (1 if diff > 0 else -1)) % 360
+                self.update_status()
+
+            self.dir = target_dir
+            self.update_status()
+        if node["nodeType"] == "CHARGE" and self.current_mission_type == "CHARGING":
             target_dir = node["direction"]
             diff = (target_dir - self.dir + 360) % 360
             if diff > 180:
@@ -595,8 +711,10 @@ class AMR:
                 yield self.env.timeout(REALTIME_INTERVAL)
 
         # 7. charging 노드에서는 충전
-        if node["nodeType"] == "CHARGING":
+        if node["nodeType"] == "CHARGE" and self.current_mission_type == "CHARGING":
             print(f"🔋 {self.id} 충전 시작 (100초 동안 1%씩)")
+            self.state=3
+            self.update_status()
             for _ in range(int(100 / REALTIME_INTERVAL)):  # 100초 = 1초당 1%
                 self.battery += 0.01
                 if self.battery > 100:
@@ -604,10 +722,14 @@ class AMR:
                     break
                 self.update_status()
                 yield self.env.timeout(REALTIME_INTERVAL)
+            self.state=2
+            self.update_status()
+
 
         with LOCK:
             if NODE_RESERVATIONS.get(self.current_node_id) == self.id:
                 del NODE_RESERVATIONS[self.current_node_id]
+
 
     def get_distance(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
@@ -711,64 +833,128 @@ def broadcast_status():
 
 # ─── Person 클래스 수정 ────────────────────────────────
 class Person:
-    def __init__(self, env, person_id, start_x, start_y):
+    def __init__(self, env, person_id, start_x, start_y, pause_points=None, pause_time=3.0):
         self.env = env
         self.id = person_id
-        self.pos_x = start_x
-        self.pos_y = start_y
-        self.dir = 0                # 방향 추가
+        # 평소에는 숨김 위치
+        self.pos_x = 1000.0
+        self.pos_y = 1000.0
+        self.dir = 0                # 방향
         self.route = None
         self.route_index = 0
         self.go_back = False
-        self.state = 0
+        self.state = 0              # 0: IDLE, 1: MOVING, 2: WAITING, 3: ROT_CCW, 4: ROT_CW
+
+        # 멈출 좌표 리스트 ([(x1,y1), (x2,y2), ...])
+        self.pause_points = pause_points or [(73.5, 16.0),(70.5, 16.0)]
+        # 멈춤 시간(초)
+        self.pause_time   = pause_time
 
     def update_status(self):
         with LOCK:
             SHARED_STATUS[self.id] = {
-                "id":  self.id,
-                "x":   self.pos_x,
-                "y":   self.pos_y,
-                "dir": self.dir,     # 방향 포함
+                "id":    self.id,
+                "x":     self.pos_x,
+                "y":     self.pos_y,
+                "dir":   self.dir,
                 "state": self.state,
             }
 
     def walk_to(self, tx, ty):
-        self.state=1
-        self.update_status()
-        # 방향 계산
+        """
+        이동 전 회전: state=3(왼쪽 CCW) or 4(오른쪽 CW), 1초간 대기
+        그 뒤 state=1 이동, 도착 후 state=0 IDLE
+        방향 기준을 AMR과 동일하게: 0°=up, 90°=right, 180°=down, 270°=left
+        """
+        # 1) 목표 벡터
         dx = tx - self.pos_x
         dy = ty - self.pos_y
-        angle_rad = math.atan2(dy, dx)
-        self.dir = (math.degrees(angle_rad) + 360) % 360
 
+        # 2) 표준 atan2() 각도를 0°=right 기준으로 구한 뒤,
+        #    AMR 기준인 0°=up 으로 변환
+        #    angle_std: degrees from +x-axis (0°=right, CCW positive)
+        angle_std   = (math.degrees(math.atan2(dy, dx)) + 360) % 360
+        # desired_dir: 0°=up, CW positive
+        desired_dir = (90 - angle_std) % 360
+
+        # 3) 회전량 diff 계산 (–180, +180] 범위)
+        diff = (desired_dir - self.dir + 540) % 360 - 180
+
+        # 4) 회전할 필요가 있으면 state 설정 후 1초 대기
+        if abs(diff) > 1e-3:
+            # AMR 코드와 동일하게, diff>0 이면 CW(시계) 회전
+            if diff > 0:
+                self.state = 3   # ROT_CW
+            else:
+                self.state = 4   # ROT_CCW
+            self.update_status()
+
+            # 1초간 회전 시뮬레이션
+            wait_steps = int(1.0 / REALTIME_INTERVAL)
+            for _ in range(wait_steps):
+                yield self.env.timeout(REALTIME_INTERVAL)
+
+            # 회전 끝내고 정확한 각도로 설정
+            self.dir   = desired_dir
+            self.state = 1   # 이동 상태으로 전환
+            self.update_status()
+        else:
+            # 방향 거의 일치하면 바로 이동 상태
+            self.dir   = desired_dir
+            self.state = 1
+            self.update_status()
+
+        # --- 나머지 이동 로직은 기존과 동일 ---
         dist = math.hypot(dx, dy)
         if dist < 1e-3:
+            self.state = 0
+            self.update_status()
             return
-        steps = max(1, int(dist / (1.0 * REALTIME_INTERVAL)))
+
+        steps   = max(1, int(dist / (0.5 * REALTIME_INTERVAL)))
         step_dx = dx / steps
         step_dy = dy / steps
+
         for _ in range(steps):
             yield self.env.timeout(REALTIME_INTERVAL)
             self.pos_x += step_dx
             self.pos_y += step_dy
             self.update_status()
 
+        self.state = 0
+        self.update_status()
 
     def run(self):
         while True:
             if self.route:
+                # 시작 시 첫 좌표로 순간이동
+                if self.route_index == 0 and not self.go_back:
+                    sx, sy = self.route[0]
+                    self.pos_x, self.pos_y = sx, sy
+                    self.state = 0
+                    self.update_status()
+
                 target = self.route[self.route_index]
                 # 1) 목표 지점까지 이동
                 yield from self.walk_to(*target)
 
-                # 2) 도착 후 처리
+                if target in self.pause_points:
+                    self.state = 2  # WAITING
+                    self.update_status()
+                    pause_steps = int(self.pause_time / REALTIME_INTERVAL)
+                    for _ in range(pause_steps):
+                        yield self.env.timeout(REALTIME_INTERVAL)
+                    # 멈춤 끝나면 다시 이동 상태로
+                    self.state = 1
+                    self.update_status()
+
+                # 2) 순방향/되돌아오기 처리
                 if not self.go_back:
-                    # 순방향 끝점에 도달했을 때
                     if self.route_index == len(self.route) - 1:
-                        # 5초 대기
-                        self.state=2
+                        # 끝점 도착 → 5초 대기
+                        self.state = 2
                         self.update_status()
-                        wait_steps = int(5.0 / REALTIME_INTERVAL)
+                        wait_steps = int(10.0 / REALTIME_INTERVAL)
                         for _ in range(wait_steps):
                             yield self.env.timeout(REALTIME_INTERVAL)
                         self.go_back = True
@@ -776,47 +962,62 @@ class Person:
                     else:
                         self.route_index += 1
                 else:
-                    # 되돌아가기 중
                     if self.route_index == 0:
-                        # 돌아오기 완료
-                        self.route = None
-                        self.go_back = False
-                        self.state=0
+                        # 되돌아오기 완료 → 숨김 위치로 순간이동
+                        self.route      = None
+                        self.go_back    = False
+                        self.state      = 0
+                        self.pos_x, self.pos_y = 1000.0, 1000.0
                         self.update_status()
                     else:
                         self.route_index -= 1
             else:
+                # 경로 없으면 숨김 위치 유지
                 yield self.env.timeout(REALTIME_INTERVAL)
+
 
 # ─── WebSocket 메시지 핸들러에 경로 트리거 추가 ─────────────────
 def on_person_open(ws):
-    print("Person 연결됨")
+    print("🙋 Person 연결됨")
 
 def on_person_message(ws, message):
     global person
     try:
         data = json.loads(message)
         if data.get("header", {}).get("msgName") == "MOVE_TRIGGER":
-            # 경로 설정: 79,65 -> 69,65 -> 69,52.5 -> 68.5,52.5
+            # 이미 이동 중이면 중첩 방지
+            if person.route is not None:
+                print("🙋 이미 이동 중이므로 새로운 명령을 무시합니다.")
+                return
+
+            # 이동 경로가 비어 있을 때만 새로 설정
             person.route = [
-                (79.0, 65.0),
-                (69.0, 65.0),
-                (69.0, 52.5),
-                (68.5, 52.5)
+                (80.0, 6.0),
+                (79.0, 6.0),
+                (79.0, 16.0),
+                (76.5, 16.0),
+                (73.5, 16.0),
+                (70.5, 16.0),
+                (69.3, 16.0),
+                (69.3, 22.0),
+                (69.2, 22.0),
             ]
             person.route_index = 0
-            person.go_back = False
+            person.go_back    = False
             print("🙋 Person: 이동 경로 설정 완료!")
     except Exception as e:
         print("❌ Person 메시지 처리 오류:", e)
 
+
+
 # ─── PERSON_WS 설정에서 on_message에 연결 ─────────────────
 def setup_person(env):
-    p = Person(env, "PERSON001", start_x=79.0, start_y=65.0)
+    p = Person(env, "PERSON001", start_x=1000.0, start_y=1000.0)
     p.update_status()
     env.process(p.run())
     return p
-# ─── 2) 브로드캐스트 루프 추가 ────────────────────────────────
+
+# ─── 브로드캐스트 루프 ────────────────────────────────
 def broadcast_person_status():
     global person_ws
     while True:
@@ -825,16 +1026,13 @@ def broadcast_person_status():
         if status:
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             message = {
-                "header": {
-                    "msgName": "HUMAN_STATE",
-                    "time": now
-                },
+                "header": {"msgName": "HUMAN_STATE", "time": now},
                 "body": {
                     "worldX":  status["x"],
                     "worldY":  status["y"],
                     "dir":     status["dir"],
                     "humanId": status["id"],
-                    "state": status["state"],
+                    "state":   status["state"],
                 }
             }
             try:
@@ -845,7 +1043,8 @@ def broadcast_person_status():
 
 
 
-# ---------- 메인 ----------
+
+# ---------- 메인 ----------`
 if __name__ == '__main__':
     env = simpy.rt.RealtimeEnvironment(factor=0.5, strict=False)
     for ws in ws_clients:
