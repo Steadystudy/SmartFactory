@@ -58,10 +58,23 @@ export default function AMRControl() {
     if (!isConnected || !amrSocket) return;
 
     amrSocket.subscribe('/amr/mission', (message) => {
-      const data = JSON.parse(message.body);
+      const data = JSON.parse(message.body) as AMR_CARD_STATUS[];
       setData(data);
+      // 선택된 AMR의 위치 정보가 바뀌었을 때만 store 동기화
+      if (selectedAmrId) {
+        const selected = data.find((amr) => amr.amrId === selectedAmrId);
+        if (selected) {
+          const store = useSelectedAMRStore.getState();
+          if (store.startX !== selected.startX || store.startY !== selected.startY) {
+            store.setStartPosition(selected.startX, selected.startY);
+          }
+          if (store.targetX !== selected.targetX || store.targetY !== selected.targetY) {
+            store.setTargetPosition(selected.targetX, selected.targetY);
+          }
+        }
+      }
     });
-  }, [amrSocket, isConnected]);
+  }, [amrSocket, isConnected, selectedAmrId]);
 
   return (
     <div className='flex flex-col grow p-2 bg-[#0B1120] '>
