@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { HeatmapLegend } from '@/features/heatmap/ui/HeatmapLegend';
+import { AMRLegend } from './AMRLegend';
 
 // AMR 2D 렌더러 컴포넌트
 const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
@@ -108,8 +109,7 @@ const Scene2DContent = ({ showHeatmap }: { showHeatmap: boolean }) => {
       ))}
       {showHeatmap && <HeatmapLayer />}
       {/* 조명 설정 */}
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[0, 10, 0]} intensity={0.5} />
+      <ambientLight intensity={1} />
       {/* 카메라 컨트롤 */}
       <MapControls
         ref={controlsRef}
@@ -157,9 +157,12 @@ const Scene2DViewer = () => {
       </div>
       {/* 히트맵 범례 */}
       {showHeatmap && <HeatmapLegend />}
+      <AMRLegend />
       <Canvas
+        orthographic
         camera={{
           position: [40, 60, 40],
+          zoom: 9,
         }}
       >
         <Map3D />

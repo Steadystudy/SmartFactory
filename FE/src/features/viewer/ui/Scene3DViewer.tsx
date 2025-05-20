@@ -82,7 +82,7 @@ const Warehouse = () => {
       <MapControls
         ref={controlsRef}
         enableZoom={true}
-        minDistance={10}
+        minDistance={5}
         maxDistance={80}
         autoRotate={false}
         maxPolarAngle={Math.PI / 4}

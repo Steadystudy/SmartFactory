@@ -9,11 +9,14 @@ import { AMR_CURRENT_STATE } from '../model/types';
 import { degreeToRadian } from '@/shared/hooks/useMathUtils';
 import { useAmrSocketStore } from '@/shared/store/amrSocket';
 import { useLineStore } from '@/shared/store/lineStore';
+import { useSearchParams } from 'next/navigation';
 
 export const VisualizationPanel = () => {
   const { updateModels } = useModelStore();
   const { setLines } = useLineStore();
   const { amrSocket, isConnected } = useAmrSocketStore();
+  const searchParams = useSearchParams();
+  const initialView = searchParams.get('view') || '3d';
 
   useEffect(() => {
     if (!isConnected || !amrSocket) return;
@@ -32,7 +35,7 @@ export const VisualizationPanel = () => {
   return (
     <div className='w-3/4 p-4 h-dvh'>
       <div className='h-full'>
-        <Tabs defaultValue='3d' className='w-full h-full'>
+        <Tabs defaultValue={initialView} className='w-full h-full'>
           <TabsList className='grid w-full grid-cols-2 cursor-pointer bg-white/10'>
             <TabsTrigger value='3d'>공장 전체 View</TabsTrigger>
             <TabsTrigger value='2d'>Top View</TabsTrigger>
