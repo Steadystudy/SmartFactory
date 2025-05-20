@@ -118,7 +118,7 @@ import json
 from datetime import datetime
 
 def handle_mission_assign(data):
-    if ("AMR006" == data['header']['amrId']):
+    if ("CHARGING" == data['body']['missionType']):
         print("[MISSION_ASSIGN] 미션 수신:", data)
     mission = data['body']
     target_amr_id = data['header']['amrId']
@@ -157,14 +157,14 @@ def handle_mission_assign(data):
             "missionType": mission["missionType"],
             "submissions": filtered_subs
         })
-        if ("AMR006" == data['header']['amrId']):
-            print(f"✅ {amr.id} 새 미션 수락 완료 (sub {filtered_subs[0]['submissionId']}부터 수행)")
+        # if ("AMR008" == data['header']['amrId']):
+        #     print(f"✅ {amr.id} 새 미션 수락 완료 (sub {filtered_subs[0]['submissionId']}부터 수행)")
         return
 
 
 def handle_mission_cancel(data):
-    if ("AMR006" == data['header']['amrId']):
-        print("[MISSION_CANCEL] 미션 취소 수신:", data)
+    # if ("AMR008" == data['header']['amrId']):
+    #     print("[MISSION_CANCEL] 미션 취소 수신:", data)
     target_amr_id = data['header']['amrId']
 
     for amr in amrs:
@@ -419,8 +419,8 @@ class AMR:
         self.update_status()
 
     def move_to_node(self, node, edge, prev):
-        if(self.id == "AMR006"):
-            print("목표 노드: ", node["id"])
+        # if(self.id == "AMR008"):
+        #     print("목표 노드: ", node["id"])
         # ─── 상수 정의 ─────────────────────────────────────
         STOP_DIST = 1.2
         RESUME_DIST = 1.7
@@ -715,8 +715,8 @@ class AMR:
             print(f"🔋 {self.id} 충전 시작 (100초 동안 1%씩)")
             self.state=3
             self.update_status()
-            for _ in range(int(100 / REALTIME_INTERVAL)):  # 100초 = 1초당 1%
-                self.battery += 0.01
+            for _ in range(int(300 / REALTIME_INTERVAL)):  # 100초 = 1초당 1%
+                self.battery += 0.0035
                 if self.battery > 100:
                     self.battery = 100
                     break
@@ -744,32 +744,33 @@ def setup_amrs(env, map_data):
     amrs = []
 
     amr_start_positions = [
-        (115, 7.5, 6.5),
-        (103, 21.5, 3.5),
-        (106, 36.5, 3.5),
-        (109, 47.5, 3.5),
-        (112, 62.5, 3.5),
-        (132, 76.5, 6.5),
-        (133, 7.5, 38.5),
-        (136, 16.5, 38.5),
-        (140, 36.5, 38.5),
-        (143, 47.5, 38.5),
-        (147, 67.5, 38.5),
-        (150, 76.5, 38.5),
-        (169, 7.5, 73.5),
+        (119, 21.5, 6.5),
+        (175, 31.5, 73.5),
+        (131, 73.5, 6.5),
+        (202, 10.5, 19.5),
+        (160, 44.5, 41.5),
+        (117, 13.5, 6.5),
+        (223, 73.5, 54.5),
         (189, 21.5, 76.5),
-        (192, 36.5, 76.5),
-        (195, 47.5, 76.5),
+        (142, 44.5, 38.5),
+        (156, 26.5, 41.5),
+        (121, 31.5, 6.5),
+        (137, 21.5, 38.5),
+        (230, 70.5, 60.5),
         (198, 62.5, 76.5),
-        (186, 76.5, 73.5),
-        (65, 0.5, 32.5),
-        (71, 0.5, 48.5),
+        (166, 70.5, 41.5),
+        (115, 7.5, 6.5),
+        (153, 13.5, 41.5),
+        (187, 13.5, 76.5),
+        (124, 44.5, 6.5),
+        (216, 76.5, 25.5),
     ]
 
     for i, (n, x, y) in enumerate(amr_start_positions):
         amr_id = f"AMR{str(i + 1).zfill(3)}"
         amr_type = 0 if i < 10 else 1  # 0번~9번 → type=0, 10번~19번 → type=1
         amr = AMR(env, amr_id, map_data, x, y, amr_type, n)
+        amr.battery=50+i*2
         amr.update_status()
         env.process(amr.run())
         amrs.append(amr)
@@ -833,7 +834,7 @@ def broadcast_status():
 
 # ─── Person 클래스 수정 ────────────────────────────────
 class Person:
-    def __init__(self, env, person_id, start_x, start_y, pause_points=None, pause_time=3.0):
+    def __init__(self, env, person_id, start_x, start_y, pause_points=None, pause_time=3.0, move_speed=0.35):
         self.env = env
         self.id = person_id
         # 평소에는 숨김 위치
@@ -846,9 +847,10 @@ class Person:
         self.state = 0              # 0: IDLE, 1: MOVING, 2: WAITING, 3: ROT_CCW, 4: ROT_CW
 
         # 멈출 좌표 리스트 ([(x1,y1), (x2,y2), ...])
-        self.pause_points = pause_points or [(73.5, 16.0),(70.5, 16.0)]
+        self.pause_points = pause_points or []
         # 멈춤 시간(초)
         self.pause_time   = pause_time
+        self.move_speed = move_speed
 
     def update_status(self):
         with LOCK:
@@ -911,7 +913,7 @@ class Person:
             self.update_status()
             return
 
-        steps   = max(1, int(dist / (0.5 * REALTIME_INTERVAL)))
+        steps   = max(1, int(dist / (self.move_speed * REALTIME_INTERVAL)))
         step_dx = dx / steps
         step_dy = dy / steps
 
@@ -939,7 +941,7 @@ class Person:
                 yield from self.walk_to(*target)
 
                 if target in self.pause_points:
-                    self.state = 2  # WAITING
+                    self.state = 0  # WAITING
                     self.update_status()
                     pause_steps = int(self.pause_time / REALTIME_INTERVAL)
                     for _ in range(pause_steps):
@@ -954,7 +956,7 @@ class Person:
                         # 끝점 도착 → 5초 대기
                         self.state = 2
                         self.update_status()
-                        wait_steps = int(10.0 / REALTIME_INTERVAL)
+                        wait_steps = int(15.0 / REALTIME_INTERVAL)
                         for _ in range(wait_steps):
                             yield self.env.timeout(REALTIME_INTERVAL)
                         self.go_back = True
@@ -995,9 +997,6 @@ def on_person_message(ws, message):
                 (80.0, 6.0),
                 (79.0, 6.0),
                 (79.0, 16.0),
-                (76.5, 16.0),
-                (73.5, 16.0),
-                (70.5, 16.0),
                 (69.3, 16.0),
                 (69.3, 22.0),
                 (69.2, 22.0),
@@ -1044,9 +1043,9 @@ def broadcast_person_status():
 
 
 
-# ---------- 메인 ----------`
+# ---------- 메인 ----------
 if __name__ == '__main__':
-    env = simpy.rt.RealtimeEnvironment(factor=0.5, strict=False)
+    env = simpy.rt.RealtimeEnvironment(factor=0.35, strict=False)
     for ws in ws_clients:
         threading.Thread(target=ws.run_forever, daemon=True).start()
 
