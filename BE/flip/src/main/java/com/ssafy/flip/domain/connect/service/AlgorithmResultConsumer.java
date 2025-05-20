@@ -106,7 +106,7 @@ public class AlgorithmResultConsumer {
     }
     public void sendCancelMission(String amrId) {
         try {
-            getDelayedMissionMap().remove(amrId);
+            //getDelayedMissionMap().remove(amrId);
             Map<String, Object> header = new LinkedHashMap<>();
             header.put("msgName", "MISSION_CANCEL");
             header.put("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
