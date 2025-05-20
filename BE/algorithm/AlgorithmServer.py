@@ -105,6 +105,7 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
         h = r.hgetall(key)
         amr_id = h.get("amrId", f"AMR{i:03}")
         node_id = int(h.get("currentNode"))  # 기본값
+        submission_nodes=[]
         # submissionList가 존재할 때 처리
         if "submissionList" in h:
             try:
@@ -128,6 +129,8 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
                 if amr_id==triggered_amr and inputMissionType=="CHARGING":
                     robot_list.append((amr_id,node_id,0))
         else:
+            print(f"{amr_id}가 {node_id}가 다음 목적지 이기 떄문에 계산에 추가하지 않습니다.")
+            print(f"서브미션 노드는 {submission_nodes} 이고 서브미션 ID는 {int(h.get('submissionId', 0))}입니다.")
             if 1<=node_id<=10:
                 ban_work_list.append(int(h.get("finalGoal")))
             else:
@@ -241,6 +244,13 @@ def listen_loop():
             triggered_amr = None
             cancelled_amrs = []
             inputMissionType = "START"
+
+        elif raw_value.startswith("LINE BROKEN : "):
+            print("🚀 [LINE BROKEN] 라인 고장")
+            brokenLine=10
+            banNode=[20,30]
+            continue
+
 
         # ✅ 케이스 2: JSON payload
         elif raw_value.startswith("{"):
