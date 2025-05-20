@@ -15,14 +15,14 @@ export const ControlPanel = () => {
   return (
     <Tabs defaultValue='amr' className='min-w-[320px] w-1/4 h-dvh p-2'>
       <TabsList variant='control' className='flex justify-start w-full mb-2 bg-transparent'>
-        <TabsTrigger variant='control' value='amr' className='px-6 text-lg'>
+        <TabsTrigger variant='control' value='amr' className='px-6 text-lg cursor-pointer'>
           AMR
         </TabsTrigger>
         <TabsTrigger
           onClick={handleResetSelectedAmr}
           variant='control'
           value='equipment'
-          className='px-6 text-lg'
+          className='px-6 text-lg cursor-pointer'
         >
           설비
         </TabsTrigger>

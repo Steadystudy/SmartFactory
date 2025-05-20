@@ -6,13 +6,20 @@ import { Model3DProps } from '../model/types';
 import * as THREE from 'three';
 import { damp3, dampE } from 'maath/easing';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
+import { Html } from '@react-three/drei';
 
 const ANIMATION_SETTINGS = {
   rotationDamping: 0.25,
   positionDamping: 0.25,
 };
 
-export const BaseModel3D = ({ scene, position, rotation, amrState }: Model3DProps) => {
+export const BaseModel3D = ({
+  scene,
+  position,
+  rotation,
+  amrState,
+  showAmrId = true,
+}: Model3DProps & { showAmrId?: boolean }) => {
   const selectedAmrId = useSelectedAMRStore((state) => state.selectedAmrId);
   const { amrId } = amrState;
 
@@ -24,10 +31,19 @@ export const BaseModel3D = ({ scene, position, rotation, amrState }: Model3DProp
   const currentRotation = useRef(new THREE.Euler(...rotation));
   const targetRotation = useRef(new THREE.Euler(...rotation));
 
+  // Html 위치 부드럽게 이동
+  const currentHtmlPosition = useRef(
+    new THREE.Vector3(position[0] - 0.3, position[1] + 2.5, position[2] + 0.3),
+  );
+  const targetHtmlPosition = useRef(
+    new THREE.Vector3(position[0] - 0.3, position[1] + 2.5, position[2] + 0.3),
+  );
+
   // 위치나 회전이 변경되면 목표값 업데이트
   useEffect(() => {
     targetPosition.current.set(...position);
     targetRotation.current.set(...rotation);
+    targetHtmlPosition.current.set(position[0] - 0.3, position[1] + 2.5, position[2] + 0.3);
   }, [position, rotation]);
 
   useFrame((state, delta) => {
@@ -47,6 +63,9 @@ export const BaseModel3D = ({ scene, position, rotation, amrState }: Model3DProp
       ANIMATION_SETTINGS.positionDamping,
       delta,
     );
+
+    // Html 위치도 부드럽게 이동
+    damp3(currentHtmlPosition.current, targetHtmlPosition.current, 0.08, delta);
 
     // 모델에 현재 위치와 회전 적용
     modelRef.current.position.copy(currentPosition.current);
@@ -70,5 +89,21 @@ export const BaseModel3D = ({ scene, position, rotation, amrState }: Model3DProp
     });
   }, [selectedAmrId, amrId]);
 
-  return <primitive ref={modelRef} object={scene} className='cursor-pointer' />;
+  return (
+    <>
+      <group ref={modelRef}>
+        {showAmrId && (
+          <Html position={[0.5, 2.5, 0.5]}>
+            <div
+              className='text-base font-bold text-white'
+              style={{ fontSize: '18px', minWidth: 32, textAlign: 'center' }}
+            >
+              {amrId}
+            </div>
+          </Html>
+        )}
+        <primitive object={scene} className='cursor-pointer' />
+      </group>
+    </>
+  );
 };

@@ -17,7 +17,7 @@ export const RoutePath = () => {
   const [route, setRoute] = useState<[number, number, number][]>([]);
   const { selectedAmrId, startX, startY, targetX, targetY } = useSelectedAMRStore();
   const { amrSocket, isConnected } = useAmrSocketStore();
-  const urlRef = useRef<string>('');
+  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
   const { getSelectedModel } = useModelStore();
 
   // 출발지/도착지 변경 감지 및 toast
@@ -36,36 +36,35 @@ export const RoutePath = () => {
   }, [selectedAmrId, startX, startY, targetX, targetY]);
 
   useEffect(() => {
-    if (!amrSocket || !isConnected) return;
-    const destination = `/app/amr/route/${selectedAmrId}`;
-    // 이전 구독 취소
-    amrSocket.publish({
-      destination: urlRef.current + '/unsubscribe',
-    });
-    amrSocket.unsubscribe(urlRef.current);
+    // 이전 구독 해제
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
 
     // 새로운 구독
-    amrSocket.publish({
-      destination,
-    });
-
-    amrSocket.subscribe(`/amr/route/${selectedAmrId}`, (data) => {
-      const routeData = JSON.parse(data.body);
-      const amr = getSelectedModel(selectedAmrId);
-      setRoute([
-        [amr?.locationX, 0.11, amr?.locationY],
-        ...routeData.missionStatusList.map((p: Route) => [p.submissionX, 0.11, p.submissionY]),
-      ]);
-    });
-
-    urlRef.current = destination;
-
-    return () => {
-      amrSocket.publish({
-        destination: urlRef.current + '/unsubscribe',
+    if (amrSocket && isConnected && selectedAmrId) {
+      const destination = `/amr/route/${selectedAmrId}`;
+      subscriptionRef.current = amrSocket.subscribe(destination, (data: { body: string }) => {
+        const routeData = JSON.parse(data.body);
+        const amr = getSelectedModel(selectedAmrId);
+        setRoute([
+          [amr?.locationX, 0.11, amr?.locationY],
+          ...routeData.missionStatusList.map((p: Route) => [p.submissionX, 0.11, p.submissionY]),
+        ]);
       });
-      amrSocket.unsubscribe(urlRef.current);
-      urlRef.current = '';
+      // subscribe 직후에만 publish
+      amrSocket.publish({ destination: `/app/amr/route/${selectedAmrId}` });
+    } else {
+      setRoute([]);
+    }
+
+    // cleanup: 현재 구독 해제
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+        subscriptionRef.current = null;
+      }
       setRoute([]);
     };
   }, [selectedAmrId, amrSocket, isConnected, getSelectedModel]);
