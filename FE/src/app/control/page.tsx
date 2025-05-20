@@ -5,7 +5,7 @@ import { VisualizationPanel } from '@/features/visualization';
 import { SOCKET_URL } from '@/shared/constants/api';
 import { useAmrSocketStore } from '@/shared/store/amrSocket';
 import { Client } from '@stomp/stompjs';
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import SockJS from 'sockjs-client';
 
 const StompClientConfig = {
@@ -49,9 +49,11 @@ export default function ControlPage() {
   }, [setAmrSocket, setIsConnected, reset]);
 
   return (
-    <div className='flex h-screen'>
-      <ControlPanel />
-      <VisualizationPanel />
-    </div>
+    <Suspense fallback={<div>Loading...</div>}>
+      <div className='flex h-screen'>
+        <ControlPanel />
+        <VisualizationPanel />
+      </div>
+    </Suspense>
   );
 }

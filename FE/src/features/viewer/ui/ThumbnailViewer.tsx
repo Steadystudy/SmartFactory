@@ -96,8 +96,8 @@ const ThumnailContent = () => {
       {models.map((amrInfo) => (
         <AMR2DThumbnailRenderer key={amrInfo.amrId} amrInfo={amrInfo} />
       ))}
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[0, 10, 0]} intensity={0.5} />
+      <ambientLight intensity={1} />
+      <directionalLight position={[0, 10, 0]} intensity={0} />
       <MapControls
         ref={controlsRef}
         enableZoom={true}
@@ -106,7 +106,7 @@ const ThumnailContent = () => {
         maxPolarAngle={0}
         minPolarAngle={0}
         enableRotate={false}
-        target={[40, 0, 40]}
+        target={[42, 0, 42]}
       />
     </>
   );
@@ -116,7 +116,7 @@ const ThumnailContent = () => {
 export default function Scene2DThumbnailViewer() {
   return (
     <div className='relative w-full h-full cursor-grab active:cursor-grabbing'>
-      <Canvas camera={{ position: [40, 60, 40] }}>
+      <Canvas orthographic camera={{ position: [42, 60, 42], zoom: 5.5 }}>
         <Map3D />
         <ThumnailContent />
       </Canvas>
