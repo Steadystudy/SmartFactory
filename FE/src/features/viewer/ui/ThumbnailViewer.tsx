@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -114,9 +114,30 @@ const ThumnailContent = () => {
 
 // 썸네일 전용 2D 뷰어
 export default function Scene2DThumbnailViewer() {
+  const [canvasKey, setCanvasKey] = useState(() => Date.now());
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // context lost 핸들러
+  const handleContextLost = useCallback((e: Event) => {
+    e.preventDefault();
+    setCanvasKey(Date.now());
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    // 실제 <canvas> DOM을 찾음
+    const canvas = container.querySelector('canvas');
+    if (!canvas) return;
+    canvas.addEventListener('webglcontextlost', handleContextLost, false);
+    return () => {
+      canvas.removeEventListener('webglcontextlost', handleContextLost, false);
+    };
+  }, [handleContextLost, canvasKey]);
+
   return (
-    <div className='relative w-full h-full cursor-grab active:cursor-grabbing'>
-      <Canvas orthographic camera={{ position: [42, 60, 42], zoom: 5.5 }}>
+    <div ref={containerRef} className='relative w-full h-full cursor-grab active:cursor-grabbing'>
+      <Canvas key={canvasKey} orthographic camera={{ position: [42, 60, 42], zoom: 5.5 }}>
         <Map3D />
         <ThumnailContent />
       </Canvas>

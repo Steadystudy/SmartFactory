@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { HeatmapLegend } from '@/features/heatmap/ui/HeatmapLegend';
 import { AMRLegend } from './AMRLegend';
+import { RoutePath } from './RoutePath';
 
 // AMR 2D 렌더러 컴포넌트
 const AMR2DRenderer = ({ amrInfo }: { amrInfo: AMR_CURRENT_STATE }) => {
@@ -166,6 +167,7 @@ const Scene2DViewer = () => {
         }}
       >
         <Map3D />
+        <RoutePath />
         <Scene2DContent showHeatmap={showHeatmap} />
       </Canvas>
     </div>
