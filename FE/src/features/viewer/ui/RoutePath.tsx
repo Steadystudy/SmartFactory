@@ -66,8 +66,9 @@ export const RoutePath = () => {
       });
       amrSocket.unsubscribe(urlRef.current);
       urlRef.current = '';
+      setRoute([]);
     };
-  }, [selectedAmrId, amrSocket, isConnected]);
+  }, [selectedAmrId, amrSocket, isConnected, getSelectedModel]);
 
   if (!route || route.length < 1) return null;
 
