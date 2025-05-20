@@ -9,11 +9,14 @@ const SelectedAMRMarkers = () => {
   const startY = useSelectedAMRStore((state) => state.startY);
   const targetX = useSelectedAMRStore((state) => state.targetX);
   const targetY = useSelectedAMRStore((state) => state.targetY);
-  if (!selectedAmrId) return null;
   return (
     <>
-      {startX && startY && <MapPointer position={[startX, 3, startY]} color='Blue' />}
-      {targetX && targetY && <MapPointer position={[targetX, 3, targetY]} color='Red' />}
+      {selectedAmrId && startX && startY && (
+        <MapPointer position={[startX, 3, startY]} color='Blue' />
+      )}
+      {selectedAmrId && targetX && targetY && (
+        <MapPointer position={[targetX, 3, targetY]} color='Red' />
+      )}
       <RoutePath />
     </>
   );
