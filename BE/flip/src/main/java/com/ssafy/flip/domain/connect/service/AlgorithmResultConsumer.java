@@ -88,6 +88,8 @@ public class AlgorithmResultConsumer {
                         getDelayedMissionMap().remove(res.getAmrId());
                         delayedMissionMap.put(delayed.getAmrId(), delayed);
                         log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
+                        String key = "AMR_STATUS:" + delayed.getAmrId();
+                        redis.opsForHash().put(key, "finalGoal", String.valueOf(delayed.getRoute().getLast()));
                     }
                     else{
                         log.info("❗ 비상 2번 째 미션이 없는데 실행됨");

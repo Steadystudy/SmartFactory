@@ -280,7 +280,8 @@ def calEdgeCutRoute(startCancelStartEndNode,cancelled_amrs):
         start=startCancelStartEndNode[i][0]
         dest=startCancelStartEndNode[i][1]
         path,cost=aStar(start,dest)
-        results.append(((amrId, "dummy", "dummy"), (dest, "dummy"), missions[dest], path, cost))
+        best_path = [node for node, _ in path]
+        results.append(((amrId, "dummy", "dummy"), (dest, "dummy"), missions[dest], best_path, cost))
     return results
 
 
