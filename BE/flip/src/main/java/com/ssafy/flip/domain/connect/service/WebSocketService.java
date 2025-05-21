@@ -15,4 +15,6 @@ public interface WebSocketService {
 
     Map<String, WebSocketSession> getAmrSessions();
 
+    void sendCancelMission(String amrId);
+
 }

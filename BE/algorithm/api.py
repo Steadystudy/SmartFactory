@@ -33,7 +33,10 @@ conn = pymysql.connect(
 
 def mapInit(banEdge=0):
     global nodes, edges, graph, missions
-    graph={}
+    nodes = {}       # ✅ 누락된 초기화
+    edges = []       # ✅ 누락된 초기화
+    graph = {}       # 기존에도 했던 초기화
+    missions = {}    # ✅ 누락된 초기화
     with conn.cursor() as cursor:
         # ① Node 정보
         cursor.execute("SELECT node_id, x, y FROM node")

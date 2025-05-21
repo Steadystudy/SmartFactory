@@ -79,7 +79,7 @@ def get_charging_assignments():
         if r.exists(key := f"AMR_STATUS:AMR{i:03}")
            and (h := r.hgetall(key))
            and (battery := h.get("battery")) is not None
-           and int(battery) <= 70
+           and int(battery) <= 50
     ]
 
     # 배터리 낮은 순으로 정렬 후 상위 max_amrs개 추출
@@ -137,6 +137,8 @@ def fetch_robot_list(needChargeAmrs,triggered_amr,inputMissionType) -> list[tupl
                 ban_work_list.append(node_id)
         if loading==1:
             ban_work_list.append(int(h.get("finalGoal")))
+
+    ban_work_list.extend(brokenNode)
 
     return robot_list,ban_work_list
         
@@ -212,7 +214,7 @@ def build_results_from_assign(assign):
             "missionId": f"MISSION{int(dest):03}",
             "missionType": mission_type,
             "route": path,
-            "expectedArrival": int(cost)
+            "expectedArrival": int(cost)//2
         }
         all_results.append(result)
         print("결과", result)
@@ -229,6 +231,9 @@ def print_assignment(consumer, partitions):
 
 
 def listen_loop():
+    global brokenLine, brokenNode  # 전역 변수 사용 선언
+    brokenLine=[]
+    brokenNode=[]
     consumer.subscribe(["algorithm-trigger"], on_assign=print_assignment)
     while True:
         msg = consumer.poll(1.0)
@@ -237,7 +242,7 @@ def listen_loop():
 
         raw_value = msg.value().decode("utf-8").strip()
         print(f"📩 수신 메시지: {raw_value}")
-
+        
         # ✅ 케이스 1: "simulator start"
         if raw_value.lower() == "simulator start":
             print("🚀 [Simulator Start] 알고리즘 강제 실행")
@@ -247,11 +252,66 @@ def listen_loop():
 
         elif raw_value.startswith("LINE BROKEN : "):
             print("🚀 [LINE BROKEN] 라인 고장")
-            brokenLine=10
-            banNode=[20,30]
+            brokenLine=[10]
+            brokenNode=[20,30]
+            result=[]
+            for i in range(1,21):
+                amr_id=f"AMR{i:03d}"
+                key = f"AMR_STATUS:{amr_id}"
+                h = r.hgetall(key)
+                if "submissionList" in h:
+                    try:
+                        submission_list = [json.loads(s) for s in json.loads(h["submissionList"])]
+                        # submissionNode 목록만 추출
+                        submission_nodes = [s.get("submissionNode") for s in submission_list]
+
+                        # currentNode가 submissionList에 있다면, 그 다음 submissionNode 사용
+                        if len(submission_nodes)!=0:
+                            node_id = submission_nodes[int(h.get("submissionId", 0))]
+                        else:
+                            node_id = int(h.get("currentNode"))  # 기본값
+                            pass  # 그대로 current_node 유지
+                    except Exception as e:
+                        pass
+                if not submission_nodes:
+                    continue  # 서브미션 노드가 없는 경우 그냥 건너뛰기
+                if submission_nodes[-1]==20:
+                    result=api.calEdgeCutRoute([(node_id,40)],[amr_id])
+                    continue
+                elif submission_nodes[-1]==30:
+                    continue
+
             continue
 
+        elif raw_value.startswith("LINE REPAIR : "):
+            print("🚀 [LINE REPAIR] 라인 수리")
+            brokenLine=[]
+            brokenNode=[]
+            continue
 
+        elif raw_value.lower().startswith("none edge error"):
+            try:
+                # 예: "None Edge Error : AMR015"
+                amr_id = raw_value.split(":")[-1].strip()  # → 'AMR015'
+                key = f"AMR_STATUS:{amr_id}"
+                h = r.hgetall(key)
+                
+                assign = api.calEdgeCutRoute((int(h.get("currentNode")),89), [amr_id])
+                all_results = build_results_from_assign(assign)
+                print(f"{amr_id} 는 89번으로 유배 보냄")
+                if all_results:
+                    payload = {
+                        "triggeredAmr": triggered_amr,  # None 일 수도 있음
+                        "missions": all_results
+                    }
+                    producer.produce("algorithm-result", json.dumps(payload))
+                    producer.flush()
+                
+
+            except Exception as e:
+                print(f"❌ 유배 처리 중 오류 발생: {e}")
+
+            continue
         # ✅ 케이스 2: JSON payload
         elif raw_value.startswith("{"):
             try:
@@ -272,10 +332,10 @@ def listen_loop():
                     continue
 
                 startCancelStartEndNode = findStartCancelledAmrs(cancelled_amrs)
-                print("시작과 끝노드", startCancelStartEndNode)
+                print("계산할 시작노드 와 도착지노드", startCancelStartEndNode)
                 assign = api.calEdgeCutRoute(startCancelStartEndNode, cancelled_amrs)
                 all_results = build_results_from_assign(assign)
-                print(all_results)
+                print("자른 엣지 결과",all_results)
                 if all_results:
                     payload = {
                         "triggeredAmr": None,
@@ -359,7 +419,6 @@ def listen_loop():
             producer.produce("algorithm-result", json.dumps(payload))
             producer.flush()
             #print(f"📤 Kafka 전송 완료 (trigger: {triggered_amr})")
-
 
 
 testNumber=15
