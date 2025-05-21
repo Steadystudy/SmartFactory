@@ -276,12 +276,25 @@ def listen_loop():
                 if not submission_nodes:
                     continue  # 서브미션 노드가 없는 경우 그냥 건너뛰기
                 if submission_nodes[-1]==20:
-                    result=api.calEdgeCutRoute([(node_id,40)],[amr_id])
-                    continue
+                    lineBrokenMission=api.calEdgeCutRoute([(node_id,40)],[amr_id])
+                    print(f"[LINE BROKEN] {amr_id}를 : 40번으로 유배")
+                    result.extend(lineBrokenMission)
                 elif submission_nodes[-1]==30:
-                    continue
-
+                    lineBrokenMission=api.calEdgeCutRoute([(node_id,89)],[amr_id])
+                    print(f"[LINE BROKEN] {amr_id}를 : 89번으로 유배")
+                    result.extend(lineBrokenMission)
+            if result:
+                all_results = build_results_from_assign(result)
+                print("[LINE BROKEN] : 라인 부신거 결과",all_results)
+                if all_results:
+                    payload = {
+                        "triggeredAmr": None,
+                        "missions": all_results
+                    }
+                    producer.produce("algorithm-result", json.dumps(payload))
+                    producer.flush()
             continue
+
 
         elif raw_value.startswith("LINE REPAIR : "):
             print("🚀 [LINE REPAIR] 라인 수리")
@@ -369,7 +382,11 @@ def listen_loop():
         robot,banlist   = fetch_robot_list(amrs,triggered_amr,inputMissionType)
         print(f"일 할 로봇 : {robot} 금지구역 : {banlist}")
         jobs    = fetch_line_status(banlist)
-        assign  = api.assign_tasks(robot, jobs)
+        try:
+            assign = api.assign_tasks(robot, jobs)
+        except Exception as e:
+            print(f"⚠️ assign_tasks 실행 중 오류 발생: {e}")
+            continue  # 에러가 나면 다음 루프로 넘어감
         """ 충전 친구들도 넣어야함 """
 
         # 추가 조건 필터링: CHARGING 미션이거나 loading == true인 경우 제외
