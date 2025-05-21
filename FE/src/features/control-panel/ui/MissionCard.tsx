@@ -90,7 +90,7 @@ export const MissionCard = ({ data, isSelected, onClick }: MissionCardProps) => 
       </div>
 
       <div className='flex gap-2'>
-        <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>
+        <span className='px-2 py-1 text-xs text-center text-gray-600 bg-gray-100 rounded-md w-22'>
           {data.missionType}
         </span>
         <span className='px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md'>{data.type}</span>
