@@ -7,11 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useEffect, useState, useReducer, useMemo } from 'react';
-import { AMR_CARD_STATUS } from '../model';
-import { useAmrSocketStore } from '@/shared/store/amrSocket';
-import { MissionCard } from './MissionCard';
+import { useReducer } from 'react';
 import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
+import { MissionCardList } from './MissionCardList';
 
 const FILTER_ALL = 'ALL';
 
@@ -39,46 +37,7 @@ function filterReducer(state: FilterState, action: FilterAction): FilterState {
 
 export default function AMRControl() {
   const [filter, dispatch] = useReducer(filterReducer, initialFilter);
-  const [data, setData] = useState<AMR_CARD_STATUS[]>([]);
-  const { amrSocket, isConnected } = useAmrSocketStore();
   const { selectedAmrId, toggleSelectedAMR } = useSelectedAMRStore();
-
-  const filteredData = useMemo(
-    () =>
-      data.filter((amr) => {
-        if (filter.mission !== FILTER_ALL && amr.missionType !== filter.mission) return false;
-        if (filter.amr !== FILTER_ALL && amr.type !== filter.amr) return false;
-        if (filter.state !== FILTER_ALL && amr.state !== Number(filter.state)) return false;
-        return true;
-      }),
-    [data, filter],
-  );
-
-  // 데이터 구독을 위한 useEffect
-  useEffect(() => {
-    if (!isConnected || !amrSocket) return;
-
-    amrSocket.subscribe('/amr/mission', (message) => {
-      const data = JSON.parse(message.body) as AMR_CARD_STATUS[];
-      setData(data);
-    });
-  }, [amrSocket, isConnected]);
-
-  // 선택된 AMR의 위치 정보 업데이트를 위한 useEffect
-  useEffect(() => {
-    if (!selectedAmrId) return;
-
-    const selected = data.find((amr) => amr.amrId === selectedAmrId);
-    if (selected) {
-      const store = useSelectedAMRStore.getState();
-      if (store.startX !== selected.startX || store.startY !== selected.startY) {
-        store.setStartPosition(selected.startX, selected.startY);
-      }
-      if (store.targetX !== selected.targetX || store.targetY !== selected.targetY) {
-        store.setTargetPosition(selected.targetX, selected.targetY);
-      }
-    }
-  }, [selectedAmrId, data]);
 
   return (
     <div className='flex flex-col grow p-2 bg-[#0B1120] '>
@@ -133,16 +92,11 @@ export default function AMRControl() {
         </Select>
       </div>
 
-      <div className='flex flex-col h-full p-1 mt-1 overflow-y-auto hide-scrollbar'>
-        {filteredData.map((amr) => (
-          <MissionCard
-            key={amr.amrId}
-            data={amr}
-            isSelected={selectedAmrId === amr.amrId}
-            onClick={() => toggleSelectedAMR(amr)}
-          />
-        ))}
-      </div>
+      <MissionCardList
+        filter={filter}
+        selectedAmrId={selectedAmrId}
+        toggleSelectedAMR={toggleSelectedAMR}
+      />
     </div>
   );
 }
