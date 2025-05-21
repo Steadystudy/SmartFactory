@@ -6,6 +6,7 @@ import com.ssafy.flip.domain.connect.dto.request.HumanStartRequestDTO;
 import com.ssafy.flip.domain.connect.service.AlgorithmResultConsumer;
 import com.ssafy.flip.domain.connect.service.AlgorithmTriggerProducer;
 import com.ssafy.flip.domain.connect.service.HumanWebSocketService;
+import com.ssafy.flip.domain.connect.service.WebSocketService;
 import com.ssafy.flip.domain.line.service.LineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
     private final HumanWebSocketService humanWebSocketService;
 
     private final LineService lineService;
+    private final WebSocketService webSocketService;
 
     private WebSocketSession session;
 
@@ -85,8 +87,11 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
             int edgeId = 0;
             int node1 = 0;
             int node2 = 0;
-            if(Math.abs(requestDTO.body().worldX() - 70.5F) <= 1) {
-                edgeId = 420;
+            if(Math.abs(requestDTO.body().worldX() - 80.5F) <= 1) {
+                matchedKey = "E";
+            }
+            else if(Math.abs(requestDTO.body().worldX() - 70.5F) <= 1) {
+                edgeId = 418;
                 node1 = 130;
                 node2 = 206;
                 matchedKey = "A";
@@ -96,7 +101,7 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
                 node2 = 207;
                 matchedKey = "B";
             } else if(Math.abs(requestDTO.body().worldX() - 76.5F) <= 1) {
-                edgeId = 418;
+                edgeId = 420;
                 node1 = 132;
                 node2 = 208;
                 matchedKey = "C";
@@ -157,7 +162,7 @@ public class HumanWebSocketHandler extends TextWebSocketHandler {
 
                 // ✅ 최종 취소
                 if (shouldCancel) {
-                    algorithmResultConsumer.sendCancelMission(amrCancelId);
+                    webSocketService.sendCancelMission(amrCancelId);
                     cancelledAmrs.add(amrCancelId);
                 }
             }
