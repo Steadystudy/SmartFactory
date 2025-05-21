@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { MissionCard } from './MissionCard';
 import type { AMR_CARD_STATUS } from '../model';
 import { useAmrSocketStore } from '@/shared/store/amrSocket';
+import { useSelectedAMRStore } from '@/shared/store/selected-amr-store';
 
 interface MissionCardListProps {
   filter: {
@@ -22,6 +23,7 @@ export function MissionCardList({
 }: MissionCardListProps) {
   const [data, setData] = useState<AMR_CARD_STATUS[]>([]);
   const { amrSocket, isConnected } = useAmrSocketStore();
+  const store = useSelectedAMRStore();
 
   useEffect(() => {
     if (!isConnected || !amrSocket) return;
@@ -46,6 +48,19 @@ export function MissionCardList({
       }),
     [data, filter],
   );
+
+  useEffect(() => {
+    if (!selectedAmrId) return;
+    const selected = filteredData.find((amr) => amr.amrId === selectedAmrId);
+    if (selected) {
+      if (store.startX !== selected.startX || store.startY !== selected.startY) {
+        store.setStartPosition(selected.startX, selected.startY);
+      }
+      if (store.targetX !== selected.targetX || store.targetY !== selected.targetY) {
+        store.setTargetPosition(selected.targetX, selected.targetY);
+      }
+    }
+  }, [selectedAmrId, filteredData, store]);
 
   return (
     <div className='flex flex-col h-full p-1 mt-1 overflow-y-auto hide-scrollbar'>
