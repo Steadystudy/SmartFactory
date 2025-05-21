@@ -342,7 +342,7 @@ public class AmrWebSocketHandler extends TextWebSocketHandler {
 
                             // ✅ 최종 취소
                             if (shouldCancel) {
-                                algorithmResultConsumer.sendCancelMission(amrCancelId);
+                                webSocketService.sendCancelMission(amrCancelId);
                                 cancelledAmrs.add(amrCancelId);
                             }
                         }
