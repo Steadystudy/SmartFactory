@@ -296,7 +296,7 @@ def listen_loop():
                 key = f"AMR_STATUS:{amr_id}"
                 h = r.hgetall(key)
                 
-                assign = api.calEdgeCutRoute((int(h.get("currentNode")),89), [amr_id])
+                assign = api.calEdgeCutRoute([(int(h.get("currentNode")),89)], [amr_id])
                 all_results = build_results_from_assign(assign)
                 print(f"{amr_id} 는 89번으로 유배 보냄")
                 if all_results:

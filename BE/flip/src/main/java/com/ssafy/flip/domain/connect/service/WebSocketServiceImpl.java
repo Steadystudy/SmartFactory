@@ -109,18 +109,15 @@ public class WebSocketServiceImpl implements WebSocketService {
                     // 🚨 미션 즉시 취소 후 89번으로 유배 보내는 Kafka 메시지 전송
                     sendCancelMission(amrId);
                     String key = "AMR_STATUS:" + amrId;
-                    stringRedisTemplate.opsForHash().put(key, "loading", "true");
                     stringRedisTemplate.opsForHash().put(key, "submissionList", "[]");
                     stringRedisTemplate.opsForHash().put(key, "submissionId", "0");
 
                     // 5초 후 Kafka 메시지 비동기 전송
-                    ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-                    scheduler.schedule(() -> {
-                        String kafkaPayload = "None Edge Error : " + amrId;
-                        stringRedisTemplate.opsForHash().put(key, "loading", "false");
-                        trigger.run(kafkaPayload);  // Kafka 전송
-                        log.info("📤 5초 후 Kafka 메시지 전송: {}", kafkaPayload);
-                    }, 5, TimeUnit.SECONDS);
+                    String kafkaPayload = "None Edge Error : " + amrId;
+                    stringRedisTemplate.opsForHash().put(key, "loading", "false");
+                    trigger.run(kafkaPayload);  // Kafka 전송
+                    log.info("📤 5초 후 Kafka 메시지 전송: {}", kafkaPayload);
+
 
                     // 예외 발생 (중단)
                     //throw new IllegalArgumentException("Invalid edgeKey: " + edgeKey);
