@@ -51,14 +51,7 @@ export const PersonModel = () => {
     if (newAnimation && actions[newAnimation]) {
       actions[newAnimation].reset();
       actions[newAnimation].play();
-      
-      // Turn 애니메이션의 경우 한 번만 재생
-      if (state === PersonState.TURNLEFT || state === PersonState.TURNRIGHT) {
-        actions[newAnimation].setLoop(THREE.LoopOnce, 1);
-        actions[newAnimation].clampWhenFinished = true;
-      } else {
-        actions[newAnimation].setLoop(THREE.LoopRepeat, Infinity);
-      }
+
     }
 
     previousState.current = state;
@@ -99,7 +92,7 @@ export const PersonModel = () => {
 
     // 회전 보간
     currentRotation.current = currentRotation.current.map((current, index) => {
-      return THREE.MathUtils.lerp(current, targetRotation.current[index], LERP_FACTOR);
+      return THREE.MathUtils.lerp(current, targetRotation.current[index], 0.6);
     }) as [number, number, number];
 
     // scene의 위치와 회전 업데이트
