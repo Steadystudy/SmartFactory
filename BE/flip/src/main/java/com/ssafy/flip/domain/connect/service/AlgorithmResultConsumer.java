@@ -79,20 +79,26 @@ public class AlgorithmResultConsumer {
                     List<MissionResponse> split = splitRoute(res);
                     MissionResponse now = split.get(0);
 
-                    // 첫 미션 즉시 처리
-                    processMission(now);
-
-                    // 두 번째 미션은 해시맵에 저장
-                    if (split.size() > 1) {
+                    if (split.get(0).getRoute().size() == 1 && split.size() > 1){
                         MissionResponse delayed = split.get(1);
-                        getDelayedMissionMap().remove(res.getAmrId());
-                        delayedMissionMap.put(delayed.getAmrId(), delayed);
-                        log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
-                        String key = "AMR_STATUS:" + delayed.getAmrId();
-                        redis.opsForHash().put(key, "finalGoal", String.valueOf(delayed.getRoute().getLast()));
+                        processMission(delayed);
                     }
-                    else{
-                        log.info("❗ 비상 2번 째 미션이 없는데 실행됨");
+                    else {
+
+                        // 첫 미션 즉시 처리
+                        processMission(now);
+
+                        // 두 번째 미션은 해시맵에 저장
+                        if (split.size() > 1) {
+                            MissionResponse delayed = split.get(1);
+                            getDelayedMissionMap().remove(res.getAmrId());
+                            delayedMissionMap.put(delayed.getAmrId(), delayed);
+                            log.info("✅ Kafka 2번째 미션 저장함: AMRID={}, 값은 {}", delayed.getAmrId(), delayed);
+                            String key = "AMR_STATUS:" + delayed.getAmrId();
+                            redis.opsForHash().put(key, "finalGoal", String.valueOf(delayed.getRoute().getLast()));
+                        } else {
+                            log.info("❗ 비상 2번 째 미션이 없는데 실행됨");
+                        }
                     }
                 }
             }
@@ -103,37 +109,6 @@ public class AlgorithmResultConsumer {
             log.error("❗ 알고리즘 결과 처리 실패", e);
         }
 
-    }
-    public void sendCancelMission(String amrId) {
-        try {
-            //getDelayedMissionMap().remove(amrId);
-            Map<String, Object> header = new LinkedHashMap<>();
-            header.put("msgName", "MISSION_CANCEL");
-            header.put("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")));
-            header.put("amrId", amrId);
-
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("state", "");
-
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("header", header);
-            payload.put("body", body);
-
-            String json = mapper.writeValueAsString(payload);
-            WebSocketSession session = ws.getAmrSessions().get(amrId);
-
-            if (session != null && session.isOpen()) {
-                synchronized (session) {  // 🛡️ 동시성 제어
-                    session.sendMessage(new TextMessage(json));
-                }
-                log.info("📤 MISSION_CANCEL 전송 완료: AMR = {}, Payload = {}", amrId, json);
-            } else {
-                log.warn("❗ WebSocket 세션 없음: AMR = {}", amrId);
-            }
-
-        } catch (Exception e) {
-            log.error("❗ MISSION_CANCEL 전송 실패: AMR = {}", amrId, e);
-        }
     }
 
 
