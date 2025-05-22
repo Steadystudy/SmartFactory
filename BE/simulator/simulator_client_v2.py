@@ -716,7 +716,7 @@ class AMR:
             self.state=3
             self.update_status()
             for _ in range(int(300 / REALTIME_INTERVAL)):  # 100초 = 1초당 1%
-                self.battery += 0.0035
+                self.battery += 0.007
                 if self.battery > 100:
                     self.battery = 100
                     break
