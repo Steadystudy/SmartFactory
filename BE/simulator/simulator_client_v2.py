@@ -567,7 +567,7 @@ class AMR:
                 #     print("[DEBUG] → 복귀 완료")
 
                 # 4) 배터리 소모 · 상태 갱신
-            self.battery = max(0, self.battery - 0.0005)
+            self.battery = max(0, self.battery - 0.0004)
             self.update_status()
 
             # 5) TRAFFIC_REQ 한 번만
